@@ -1,163 +1,359 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vincent Meert — Business Development | Tech, AI & Automotive</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-</head>
-<body>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vincent Meert — Tech, AI & Automotive Growth</title>
+  <style>
+    :root {
+      --bg: #0b0c0e;
+      --surface: rgba(22, 24, 29, 0.72);
+      --border: rgba(255, 255, 255, 0.1);
+      --border-active: rgba(255, 255, 255, 0.28);
+      --text: #f3f4f6;
+      --muted: #8e95a5;
+      --accent: #ff4d2d; /* Telemetry Orange */
+      --accent-glow: rgba(255, 77, 45, 0.35);
+      --goal-green: #10b981;
+      --mono: 'SF Mono', 'JetBrains Mono', ui-monospace, Menlo, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    }
 
-  <main class="container">
-    <!-- Top Status Bar -->
-    <header class="top-bar">
-      <div class="identity">
-        <span class="status-dot"></span>
-        <span>BRUSSELS / GHENT — <span id="local-time">00:00 CET</span></span>
-      </div>
-      <nav class="top-links">
-        <a href="mailto:hello@yourdomain.com">Email</a>
-        <a href="https://linkedin.com" target="_blank" rel="noopener">LinkedIn</a>
-        <button id="theme-toggle" aria-label="Toggle dark mode">Invert</button>
-      </nav>
-    </header>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
 
-    <!-- Hero / Thesis -->
-    <section class="hero">
-      <h1>Vincent Meert</h1>
-      <p class="lead">
-        Business Developer operating at the intersection of <strong>enterprise AI</strong>, 
-        <strong>software infrastructure</strong>, and <strong>connected mobility</strong>. 
-        I turn technical capabilities into commercial pipeline, OEM partnerships, and recurring revenue across Benelux and European markets.
-      </p>
-    </section>
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+      cursor: none; /* Custom physics mallet cursor */
+    }
 
-    <!-- Filter Controls -->
-    <section class="controls">
-      <span class="mono-label">SECTOR FILTER:</span>
-      <div class="filter-group">
-        <button class="filter-btn active" data-filter="all">All (04)</button>
-        <button class="filter-btn" data-filter="ai">AI &amp; Data</button>
-        <button class="filter-btn" data-filter="automotive">Automotive</button>
-        <button class="filter-btn" data-filter="tech">Enterprise Tech</button>
-      </div>
-    </section>
+    /* Subtle technical grid background */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: 
+        linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
 
-    <!-- Selected Commercial Engagements / Track Record -->
-    <section class="grid-section">
-      <h2 class="section-title">Selected Mandate &amp; Track Record</h2>
-      
-      <div class="project-list">
-        <!-- Item 1 -->
-        <article class="project-row" data-category="ai tech">
-          <div class="col-meta">
-            <span class="mono">2026 — PRESENT</span>
-            <span class="tag">AI / SPATIAL</span>
-          </div>
-          <div class="col-main">
-            <h3>Enterprise AI &amp; Workspace Architecture</h3>
-            <p class="role">AI Project &amp; Commercial Consultant</p>
-            <p class="desc">
-              Structuring enterprise adoption of spatial modeling and internal AI workflows. Bridged technical product teams with operational stakeholders to translate pilot deployments into scalable commercial rollouts.
-            </p>
-          </div>
-          <div class="col-metric">
-            <span class="metric-val">G2M</span>
-            <span class="metric-lbl">Deployment Strategy</span>
-          </div>
-        </article>
+    #physics-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
 
-        <!-- Item 2 -->
-        <article class="project-row" data-category="tech">
-          <div class="col-meta">
-            <span class="mono">2023 — 2026</span>
-            <span class="tag">B2B TECH</span>
-          </div>
-          <div class="col-main">
-            <h3>Full-Cycle ICT Account &amp; Ecosystem Expansion</h3>
-            <p class="role">Senior Sales &amp; Recruitment Consultant</p>
-            <p class="desc">
-              Owned end-to-end B2B business development across the Belgian enterprise landscape. Built key accounts from cold outbound to multi-year framework agreements for high-demand engineering and infrastructure teams.
-            </p>
-          </div>
-          <div class="col-metric">
-            <span class="metric-val">360°</span>
-            <span class="metric-lbl">Pipeline Ownership</span>
-          </div>
-        </article>
+    /* Top Goal / Target Gate */
+    #goal-zone {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 10px;
+      width: 220px;
+      background: linear-gradient(90deg, transparent, var(--goal-green), transparent);
+      box-shadow: 0 4px 28px rgba(16, 185, 129, 0.55);
+      border-radius: 0 0 8px 8px;
+      z-index: 4;
+      transition: width 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.15s ease;
+    }
 
-        <!-- Item 3 -->
-        <article class="project-row" data-category="automotive">
-          <div class="col-meta">
-            <span class="mono">2019 — 2020</span>
-            <span class="tag">AUTOMOTIVE</span>
-          </div>
-          <div class="col-main">
-            <h3>OEM Brand &amp; Retail Network Activation</h3>
-            <p class="role">Automotive Account Manager (Stellantis Brands)</p>
-            <p class="desc">
-              Managed digital acquisition and dealer-network growth initiatives for Alfa Romeo, Fiat, Jeep, and Abarth across Belux. Aligned OEM regional targets with local dealership conversion funnels.
-            </p>
-          </div>
-          <div class="col-metric">
-            <span class="metric-val">4 OEMs</span>
-            <span class="metric-lbl">Belux Network</span>
-          </div>
-        </article>
+    #goal-label {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--goal-green);
+      opacity: 0.85;
+      z-index: 4;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
-        <!-- Item 4 -->
-        <article class="project-row" data-category="tech ai">
-          <div class="col-meta">
-            <span class="mono">2020 — 2022</span>
-            <span class="tag">FINTECH / ENERGY</span>
-          </div>
-          <div class="col-main">
-            <h3>Commercial Scaling in Regulated &amp; Energy Verticals</h3>
-            <p class="role">Commercial &amp; Talent Acquisition Mandates</p>
-            <p class="desc">
-              Executed targeted commercial growth and technical team scaling assignments for Tier-1 banking (KBC) and next-gen energy providers (Bolt).
-            </p>
-          </div>
-          <div class="col-metric">
-            <span class="metric-val">B2B / B2C</span>
-            <span class="metric-lbl">Market Penetration</span>
-          </div>
-        </article>
-      </div>
-    </section>
+    /* HUD Bar */
+    .hud-bar {
+      position: fixed;
+      top: 24px;
+      left: 32px;
+      right: 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 5;
+      pointer-events: none;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
 
-    <!-- Core Commercial Capabilities (2-Column Grid) -->
-    <section class="capabilities-grid">
-      <div class="cap-block">
-        <h2 class="section-title">Commercial Playbook</h2>
-        <ul class="clean-list">
-          <li><strong>Zero-to-One Territory Launch:</strong> Outbound enterprise prospecting, C-level discovery, and initial pilot structuring.</li>
-          <li><strong>Strategic Partnerships &amp; Channel:</strong> OEM, Tier-1 supplier, and system integrator alliance building.</li>
-          <li><strong>Technical Translation:</strong> Converting complex AI, cloud, and hardware specs into concrete ROI and procurement cases.</li>
-          <li><strong>Trilingual Execution:</strong> Native Dutch, fluent English and French across Brussels, Flanders, and Wallonia.</li>
-        </ul>
-      </div>
+    .hud-pill {
+      pointer-events: auto;
+      background: var(--surface);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s;
+    }
 
-      <div class="cap-block">
-        <h2 class="section-title">Focus Verticals</h2>
-        <ul class="clean-list">
-          <li><strong>Applied AI &amp; Automation:</strong> Enterprise LLMs, spatial computing, workflow orchestration, and industrial IoT.</li>
-          <li><strong>Automotive &amp; Mobility:</strong> Connected vehicle ecosystems, EV infrastructure, fleet telematics, and OEM retail tech.</li>
-          <li><strong>Software &amp; Cloud Infrastructure:</strong> B2B SaaS, DevOps tooling, and specialized engineering capacity.</li>
-        </ul>
-      </div>
-    </section>
+    .hud-pill.bump {
+      transform: scale(1.12);
+      border-color: var(--goal-green);
+    }
 
-    <!-- Footer -->
-    <footer class="footer">
-      <div>Available for Business Development, Strategic Partnerships &amp; Commercial Leadership roles.</div>
-      <div class="mono">© 2026 VINCENT MEERT</div>
-    </footer>
-  </main>
+    .score-val {
+      color: var(--text);
+      font-weight: 700;
+      font-size: 14px;
+    }
 
-  <script src="script.js"></script>
-</body>
-</html>
+    .timer-val {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .plus-one {
+      position: fixed;
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--goal-green);
+      pointer-events: none;
+      z-index: 10;
+      animation: floatUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translateY(0) scale(0.9); }
+      100% { opacity: 0; transform: translateY(-34px) scale(1.15); }
+    }
+
+    /* Main Content Container */
+    main {
+      position: relative;
+      z-index: 3;
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      padding: 80px 6vw;
+      gap: 48px;
+      pointer-events: none;
+    }
+
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+        padding: 88px 24px 120px;
+        overflow-y: auto;
+      }
+    }
+
+    /* Left Column: Bio & Identity */
+    .identity-col {
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 999px;
+      pointer-events: auto;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--goal-green);
+      box-shadow: 0 0 10px var(--goal-green);
+    }
+
+    h1 {
+      font-size: clamp(2rem, 3.6vw, 3.25rem);
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      line-height: 1.08;
+      color: var(--text);
+    }
+
+    .subtitle {
+      font-size: 1.05rem;
+      line-height: 1.6;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .subtitle strong {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* Bounce Physics Colliders (DOM Elements that interact with the puck) */
+    .collider-card {
+      pointer-events: auto;
+      background: var(--surface);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s, background 0.2s;
+      will-change: transform;
+    }
+
+    .collider-card:hover {
+      border-color: var(--border-active);
+      transform: translateY(-2px);
+    }
+
+    .collider-card.hit {
+      border-color: var(--accent);
+      background: rgba(255, 77, 45, 0.08);
+    }
+
+    .domain-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+
+    .card-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-tag {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    .card-desc {
+      font-size: 0.86rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .btn-link {
+      pointer-events: auto;
+      text-decoration: none;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 10px 16px;
+      border-radius: 10px;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s, background 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: none;
+    }
+
+    .btn-link:hover {
+      border-color: var(--text);
+      transform: scale(1.04);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .btn-link:active {
+      transform: scale(0.96);
+    }
+
+    /* Bottom Controls & Leaderboard Dock (Silber style) */
+    .bottom-dock {
+      position: fixed;
+      bottom: 24px;
+      left: 32px;
+      right: 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      z-index: 5;
+      pointer-events: none;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .dock-panel {
+      pointer-events: auto;
+      background: var(--surface);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .control-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 90
