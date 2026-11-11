@@ -92,6 +92,7 @@
     const RING_TEXT = "vincent meert drives growth in tech & ai. previously, he worked across automotive ict & more   ";
     const NUM_NODES = RING_TEXT.length;
     const BASE_RADIUS = Math.min(W, H) < 600 ? 115 : 150;
+    const GRAVITY = 0.55; // Constant downward gravity
 
     // ---------------------------------------------------------
     // 2. WEB AUDIO SYNTH (BOUNCE & SHATTER)
@@ -109,7 +110,7 @@
     function playBounceSound(intensity) {
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
-      const vol = Math.min(0.4, Math.max(0.04, intensity / 24));
+      const vol = Math.min(0.4, Math.max(0.03, intensity / 24));
 
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
@@ -162,12 +163,12 @@
     // ---------------------------------------------------------
     const ball = {
       x: W * 0.5,
-      y: H * 0.5,
-      vx: 0,           // Stationary until moved by user
-      vy: 0,           // Stationary until moved by user
+      y: H * 0.42,     // Starts in middle of page and drops to bottom on load
+      vx: 1.2,         // Slight horizontal drift so initial drop rolls & spins nicely
+      vy: 0,
       radius: BASE_RADIUS,
       angle: -0.5,
-      omega: 0,
+      omega: 0.018,    // Initial gentle spin on drop
       isDragging: false,
       dragOffsetX: 0,
       dragOffsetY: 0,
@@ -195,7 +196,7 @@
     }
 
     // ---------------------------------------------------------
-    // 4. POINTER INTERACTION & CLICK-TO-RESPAWN
+    // 4. POINTER INTERACTION, SPIN TORQUE & CLICK-TO-RESPAWN
     // ---------------------------------------------------------
     const pointer = {
       x: W * 0.5,
@@ -207,20 +208,28 @@
       down: false
     };
 
+    // Mouse wheel / trackpad scroll also spins the text ring so it's always easy to read
+    window.addEventListener('wheel', (e) => {
+      if (ball.state === 'intact') {
+        ball.omega += (e.deltaY + e.deltaX) * 0.00018;
+        ball.omega = Math.max(-0.22, Math.min(0.22, ball.omega));
+      }
+    }, { passive: true });
+
     window.addEventListener('pointerdown', (e) => {
       unlockAudio();
       pointer.down = true;
       pointer.x = pointer.px = e.clientX;
       pointer.y = pointer.py = e.clientY;
 
-      // If ball is popped/shattered, clicking anywhere respawns it
+      // If ball is popped/shattered, clicking anywhere respawns it at cursor and drops it
       if (ball.state === 'shattered') {
         const margin = ball.radius + 16;
         ball.x = Math.max(margin, Math.min(W - margin, e.clientX));
         ball.y = Math.max(margin, Math.min(H - margin, e.clientY));
-        ball.vx = 0;
+        ball.vx = (Math.random() - 0.5) * 3;
         ball.vy = 0;
-        ball.omega = 0;
+        ball.omega = 0.025;
         ball.state = 'reforming';
         ball.reformStart = performance.now();
         document.body.classList.remove('shattered');
@@ -231,7 +240,7 @@
       if (ball.state !== 'intact') return;
 
       const dist = Math.hypot(pointer.x - ball.x, pointer.y - ball.y);
-      if (dist <= ball.radius * 1.2) {
+      if (dist <= ball.radius * 1.25) {
         ball.isDragging = true;
         ball.dragOffsetX = ball.x - pointer.x;
         ball.dragOffsetY = ball.y - pointer.y;
@@ -251,8 +260,18 @@
       if (ball.isDragging) {
         ball.isDragging = false;
         document.body.classList.remove('dragging');
-        ball.vx = Math.max(-34, Math.min(34, pointer.vx * 0.85));
-        ball.vy = Math.max(-34, Math.min(34, pointer.vy * 0.85));
+
+        // Transfer linear throw velocity
+        ball.vx = Math.max(-36, Math.min(36, pointer.vx * 0.85));
+        ball.vy = Math.max(-36, Math.min(36, pointer.vy * 0.85));
+
+        // Impart generous rotational torque from the flick vector so the wheel spins & stays readable
+        const rx = pointer.x - ball.x;
+        const ry = pointer.y - ball.y;
+        const crossTorque = (rx * pointer.vy - ry * pointer.vx) / (ball.radius * ball.radius);
+        const horizontalSpin = pointer.vx / (ball.radius * 0.85);
+        ball.omega += crossTorque * 0.55 + horizontalSpin * 0.35;
+        ball.omega = Math.max(-0.22, Math.min(0.22, ball.omega));
       }
     });
 
@@ -285,7 +304,7 @@
 
         const popSpeed = 6 + Math.random() * 14;
         n.vx = nx * popSpeed + (Math.random() - 0.5) * 8;
-        n.vy = ny * popSpeed + (Math.random() - 0.5) * 8 - 3;
+        n.vy = ny * popSpeed + (Math.random() - 0.5) * 8 - 4;
         n.vRot = (Math.random() - 0.5) * 0.28;
         n.rOffset = 0;
         n.rVel = 0;
@@ -293,7 +312,7 @@
     }
 
     // ---------------------------------------------------------
-    // 6. PHYSICS STEP
+    // 6. PHYSICS STEP (GRAVITY, BOUNCE, SPIN & INDENTATION)
     // ---------------------------------------------------------
     function updatePhysics(now) {
       pointer.vx = pointer.x - pointer.px;
@@ -301,12 +320,12 @@
       pointer.px = pointer.x;
       pointer.py = pointer.y;
 
-      // STATE 1: SHATTERED (WAITS INDEFINITELY UNTIL USER CLICKS)
+      // STATE 1: SHATTERED (WAITS UNTIL USER CLICKS)
       if (ball.state === 'shattered') {
         const pad = 12;
         for (let i = 0; i < NUM_NODES; i++) {
           const n = ball.nodes[i];
-          n.vy += 0.32;
+          n.vy += 0.38; // Gravity on shattered letters
           n.vx *= 0.985;
           n.vy *= 0.985;
           n.wx += n.vx;
@@ -329,7 +348,7 @@
 
       // STATE 2: REFORMING AFTER USER CLICK
       if (ball.state === 'reforming') {
-        const duration = 0.55;
+        const duration = 0.5;
         const elapsed = Math.max(0, (now - ball.reformStart) / 1000);
         const t = Math.min(1, elapsed / duration);
         const ease = 1 - Math.pow(1 - t, 3);
@@ -341,13 +360,13 @@
           const targetY = ball.y + Math.sin(theta) * ball.radius;
           const targetAngle = theta + Math.PI * 0.5;
 
-          n.wx += (targetX - n.wx) * (0.15 + ease * 0.35);
-          n.wy += (targetY - n.wy) * (0.15 + ease * 0.35);
+          n.wx += (targetX - n.wx) * (0.16 + ease * 0.36);
+          n.wy += (targetY - n.wy) * (0.16 + ease * 0.36);
 
           let diff = ((targetAngle - n.wAngle) % (Math.PI * 2));
           if (diff > Math.PI) diff -= Math.PI * 2;
           if (diff < -Math.PI) diff += Math.PI * 2;
-          n.wAngle += diff * (0.18 + ease * 0.35);
+          n.wAngle += diff * (0.18 + ease * 0.36);
 
           n.rOffset = 0;
           n.rVel = 0;
@@ -359,8 +378,8 @@
         return;
       }
 
-      // STATE 3: INTACT BALL
-      const canTriggerWallColor = (now - ball.lastWallHit) > 110;
+      // STATE 3: INTACT BALL WITH GRAVITY & ENHANCED SPIN
+      const canTriggerWallColor = (now - ball.lastWallHit) > 120;
 
       if (ball.isDragging) {
         const targetX = pointer.x + ball.dragOffsetX;
@@ -369,7 +388,13 @@
         ball.vy = (targetY - ball.y) * 0.42;
         ball.x += ball.vx;
         ball.y += ball.vy;
-        ball.omega *= 0.9;
+
+        // Spin the wheel actively while dragging it around or whipping the cursor
+        const rx = pointer.x - ball.x;
+        const ry = pointer.y - ball.y;
+        const dragTorque = (rx * pointer.vy - ry * pointer.vx) / (ball.radius * ball.radius);
+        ball.omega = ball.omega * 0.92 + dragTorque * 0.28 + (ball.vx / ball.radius) * 0.14;
+        ball.omega = Math.max(-0.22, Math.min(0.22, ball.omega));
 
         const touchingEdge =
           ball.x - ball.radius <= 0 ||
@@ -386,41 +411,39 @@
       } else {
         ball.wasTouchingEdge = false;
 
-        // Move & naturally decelerate to a stop unless moved again
+        // Apply downward gravity so the wheel always falls & lands on the bottom
+        ball.vy += GRAVITY;
+
         ball.x += ball.vx;
         ball.y += ball.vy;
-        ball.vx *= 0.992;
-        ball.vy *= 0.992;
-        ball.omega *= 0.992;
 
-        if (Math.hypot(ball.vx, ball.vy) < 0.05) {
-          ball.vx = 0;
-          ball.vy = 0;
-        }
-        if (Math.abs(ball.omega) < 0.0002) {
-          ball.omega = 0;
-        }
+        // Low angular damping so the wheel keeps spinning smoothly to read the text
+        ball.vx *= 0.995;
+        ball.omega *= 0.9965;
 
-        // RIGID BOUNCE OFF WALLS (Does NOT indent when hitting sides in free flight)
+        // Left Wall Bounce + Spin Transfer
         if (ball.x - ball.radius <= 0) {
           ball.x = ball.radius;
           if (ball.vx < 0) {
             const impact = Math.abs(ball.vx);
-            ball.vx = Math.abs(ball.vx) * 0.88;
-            ball.omega = ball.vy * 0.0016;
-            if (canTriggerWallColor && impact > 0.4) {
+            ball.vx = Math.abs(ball.vx) * 0.82;
+            // Wall friction converts vertical motion + impact into spin
+            ball.omega += (ball.vy * 0.0022) + (impact * 0.003);
+            if (canTriggerWallColor && impact > 1.2) {
               cycleBackgroundColor();
               playBounceSound(impact);
               ball.lastWallHit = now;
             }
           }
-        } else if (ball.x + ball.radius >= W) {
+        }
+        // Right Wall Bounce + Spin Transfer
+        else if (ball.x + ball.radius >= W) {
           ball.x = W - ball.radius;
           if (ball.vx > 0) {
             const impact = Math.abs(ball.vx);
-            ball.vx = -Math.abs(ball.vx) * 0.88;
-            ball.omega = -ball.vy * 0.0016;
-            if (canTriggerWallColor && impact > 0.4) {
+            ball.vx = -Math.abs(ball.vx) * 0.82;
+            ball.omega += (-ball.vy * 0.0022) - (impact * 0.003);
+            if (canTriggerWallColor && impact > 1.2) {
               cycleBackgroundColor();
               playBounceSound(impact);
               ball.lastWallHit = now;
@@ -428,30 +451,58 @@
           }
         }
 
+        // Ceiling Bounce
         if (ball.y - ball.radius <= 0) {
           ball.y = ball.radius;
           if (ball.vy < 0) {
             const impact = Math.abs(ball.vy);
-            ball.vy = Math.abs(ball.vy) * 0.88;
-            ball.omega = -ball.vx * 0.0016;
-            if (canTriggerWallColor && impact > 0.4) {
+            ball.vy = Math.abs(ball.vy) * 0.78;
+            ball.omega += -ball.vx * 0.0025;
+            if (canTriggerWallColor && impact > 1.2) {
               cycleBackgroundColor();
               playBounceSound(impact);
               ball.lastWallHit = now;
             }
           }
-        } else if (ball.y + ball.radius >= H) {
+        }
+        // Bottom Floor Landing, Bouncing & Rolling Spin
+        else if (ball.y + ball.radius >= H) {
           ball.y = H - ball.radius;
+
           if (ball.vy > 0) {
             const impact = Math.abs(ball.vy);
-            ball.vy = -Math.abs(ball.vy) * 0.88;
-            ball.omega = ball.vx * 0.0016;
-            if (canTriggerWallColor && impact > 0.4) {
-              cycleBackgroundColor();
-              playBounceSound(impact);
-              ball.lastWallHit = now;
+
+            // Bounce up if falling fast enough; otherwise settle onto the floor
+            if (impact > 1.8) {
+              ball.vy = -impact * 0.68; // Bouncy landing on load & drops
+              // Convert bounce energy + existing spin into rolling motion & fresh spin
+              ball.vx += ball.omega * ball.radius * 0.18;
+              ball.omega += (ball.vx / ball.radius) * 0.35 + (impact * 0.0025 * (ball.omega >= 0 ? 1 : -1));
+
+              if (canTriggerWallColor && impact > 2.4) {
+                cycleBackgroundColor();
+                playBounceSound(impact);
+                ball.lastWallHit = now;
+              }
+            } else {
+              ball.vy = 0;
             }
           }
+
+          // When rolling along the floor, couple horizontal speed and wheel spin
+          ball.vx *= 0.985;
+          const targetRollOmega = (ball.vx / ball.radius) * 1.35;
+          if (Math.abs(ball.vx) > 0.15) {
+            ball.omega += (targetRollOmega - ball.omega) * 0.12;
+          } else {
+            ball.vx = 0;
+            // Let residual spin coast smoothly even after horizontal movement stops
+            ball.omega *= 0.992;
+          }
+        }
+
+        if (Math.abs(ball.omega) < 0.00015 && Math.abs(ball.vx) < 0.05) {
+          ball.omega = 0;
         }
       }
 
