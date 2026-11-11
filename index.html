@@ -14,8 +14,8 @@
     }
 
     html, body {
-      width: 100vw;
-      height: 100vh;
+      width: 100%;
+      height: 100%;
       overflow: hidden;
       background-color: #7b3fe4;
       transition: background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
@@ -35,8 +35,8 @@
 
     canvas {
       display: block;
-      width: 100vw;
-      height: 100vh;
+      position: fixed;
+      inset: 0;
     }
   </style>
 </head>
@@ -49,13 +49,15 @@
 
     let W = window.innerWidth;
     let H = window.innerHeight;
-    const dpr = window.devicePixelRatio || 1;
 
     function resize() {
+      const dpr = window.devicePixelRatio || 1;
       W = window.innerWidth;
       H = window.innerHeight;
       canvas.width = W * dpr;
       canvas.height = H * dpr;
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     resize();
@@ -99,7 +101,9 @@
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
     }
 
     function playBounceSound(intensity) {
@@ -154,7 +158,7 @@
     }
 
     // ---------------------------------------------------------
-    // 3. BALL STATE & PERIMETER NODES
+    // 3. BALL STATE & PRE-INITIALIZED PERIMETER NODES
     // ---------------------------------------------------------
     const ball = {
       x: W * 0.5,
@@ -163,7 +167,7 @@
       vy: 0,           // Stationary until moved by user
       radius: BASE_RADIUS,
       angle: -0.5,
-      omega: 0,        // Stationary rotation until moved
+      omega: 0,
       isDragging: false,
       dragOffsetX: 0,
       dragOffsetY: 0,
@@ -176,13 +180,14 @@
     };
 
     for (let i = 0; i < NUM_NODES; i++) {
+      const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
       ball.nodes.push({
         char: RING_TEXT[i],
         rOffset: 0,
         rVel: 0,
-        wx: 0,
-        wy: 0,
-        wAngle: 0,
+        wx: ball.x + Math.cos(theta) * BASE_RADIUS,
+        wy: ball.y + Math.sin(theta) * BASE_RADIUS,
+        wAngle: theta + Math.PI * 0.5,
         vx: 0,
         vy: 0,
         vRot: 0
@@ -226,7 +231,7 @@
       if (ball.state !== 'intact') return;
 
       const dist = Math.hypot(pointer.x - ball.x, pointer.y - ball.y);
-      if (dist <= ball.radius * 1.15) {
+      if (dist <= ball.radius * 1.2) {
         ball.isDragging = true;
         ball.dragOffsetX = ball.x - pointer.x;
         ball.dragOffsetY = ball.y - pointer.y;
@@ -246,7 +251,6 @@
       if (ball.isDragging) {
         ball.isDragging = false;
         document.body.classList.remove('dragging');
-        // Transfer flick velocity when released
         ball.vx = Math.max(-34, Math.min(34, pointer.vx * 0.85));
         ball.vy = Math.max(-34, Math.min(34, pointer.vy * 0.85));
       }
@@ -302,7 +306,7 @@
         const pad = 12;
         for (let i = 0; i < NUM_NODES; i++) {
           const n = ball.nodes[i];
-          n.vy += 0.32; // Gravity
+          n.vy += 0.32;
           n.vx *= 0.985;
           n.vy *= 0.985;
           n.wx += n.vx;
@@ -326,7 +330,8 @@
       // STATE 2: REFORMING AFTER USER CLICK
       if (ball.state === 'reforming') {
         const duration = 0.55;
-        const t = Math.min(1, (now - ball.reformStart) / 1000 / duration);
+        const elapsed = Math.max(0, (now - ball.reformStart) / 1000);
+        const t = Math.min(1, elapsed / duration);
         const ease = 1 - Math.pow(1 - t, 3);
 
         for (let i = 0; i < NUM_NODES; i++) {
@@ -339,8 +344,11 @@
           n.wx += (targetX - n.wx) * (0.15 + ease * 0.35);
           n.wy += (targetY - n.wy) * (0.15 + ease * 0.35);
 
-          let diff = ((targetAngle - n.wAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+          let diff = ((targetAngle - n.wAngle) % (Math.PI * 2));
+          if (diff > Math.PI) diff -= Math.PI * 2;
+          if (diff < -Math.PI) diff += Math.PI * 2;
           n.wAngle += diff * (0.18 + ease * 0.35);
+
           n.rOffset = 0;
           n.rVel = 0;
         }
@@ -355,7 +363,6 @@
       const canTriggerWallColor = (now - ball.lastWallHit) > 110;
 
       if (ball.isDragging) {
-        // Follow user drag (can be pushed into/over the screen edge to indent)
         const targetX = pointer.x + ball.dragOffsetX;
         const targetY = pointer.y + ball.dragOffsetY;
         ball.vx = (targetX - ball.x) * 0.42;
@@ -394,7 +401,7 @@
           ball.omega = 0;
         }
 
-        // RIGID BOUNCE OFF WALLS (Does NOT indent when bouncing off sides in free flight)
+        // RIGID BOUNCE OFF WALLS (Does NOT indent when hitting sides in free flight)
         if (ball.x - ball.radius <= 0) {
           ball.x = ball.radius;
           if (ball.vx < 0) {
@@ -439,4 +446,159 @@
             const impact = Math.abs(ball.vy);
             ball.vy = -Math.abs(ball.vy) * 0.88;
             ball.omega = ball.vx * 0.0016;
-            if (canTriggerWall
+            if (canTriggerWallColor && impact > 0.4) {
+              cycleBackgroundColor();
+              playBounceSound(impact);
+              ball.lastWallHit = now;
+            }
+          }
+        }
+      }
+
+      ball.angle += ball.omega;
+
+      // ---------------------------------------------------------
+      // INDENTATION SOLVER (ONLY INDENTS WHEN HELD OVER THE FRAME)
+      // ---------------------------------------------------------
+      let totalCrush = 0;
+      let maxNodeCrush = 0;
+      const wallPad = 8;
+
+      for (let i = 0; i < NUM_NODES; i++) {
+        const node = ball.nodes[i];
+        const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+
+        const idealR = ball.radius;
+        let currentR = idealR + node.rOffset;
+
+        if (ball.isDragging) {
+          const wx = ball.x + cosT * currentR;
+          const wy = ball.y + sinT * currentR;
+
+          let allowedR = currentR;
+          if (wx < wallPad && cosT < -0.02) {
+            allowedR = Math.min(allowedR, (wallPad - ball.x) / cosT);
+          }
+          if (wx > W - wallPad && cosT > 0.02) {
+            allowedR = Math.min(allowedR, (W - wallPad - ball.x) / cosT);
+          }
+          if (wy < wallPad && sinT < -0.02) {
+            allowedR = Math.min(allowedR, (wallPad - ball.y) / sinT);
+          }
+          if (wy > H - wallPad && sinT > 0.02) {
+            allowedR = Math.min(allowedR, (H - wallPad - ball.y) / sinT);
+          }
+
+          const idealUnclampedX = ball.x + cosT * idealR;
+          const idealUnclampedY = ball.y + sinT * idealR;
+          const overLeft = Math.max(0, wallPad - idealUnclampedX);
+          const overRight = Math.max(0, idealUnclampedX - (W - wallPad));
+          const overTop = Math.max(0, wallPad - idealUnclampedY);
+          const overBottom = Math.max(0, idealUnclampedY - (H - wallPad));
+          const rawCrush = Math.max(overLeft, overRight, overTop, overBottom);
+
+          if (rawCrush > 0) {
+            totalCrush += rawCrush;
+            if (rawCrush > maxNodeCrush) maxNodeCrush = rawCrush;
+          }
+
+          if (allowedR < currentR) {
+            node.rOffset = Math.max(-idealR * 0.78, allowedR - idealR);
+            node.rVel *= 0.35;
+          }
+        }
+
+        // Spring back to a pure circle
+        const springK = 0.22;
+        const damping = 0.76;
+        node.rVel += -node.rOffset * springK;
+        node.rVel *= damping;
+        node.rOffset += node.rVel;
+      }
+
+      // Smooth neighbor coupling & subtle side bulge while held against the frame
+      if (ball.isDragging && totalCrush > 0) {
+        const bulge = Math.min(32, (totalCrush / NUM_NODES) * 0.75);
+        for (let i = 0; i < NUM_NODES; i++) {
+          const prev = ball.nodes[(i - 1 + NUM_NODES) % NUM_NODES];
+          const next = ball.nodes[(i + 1) % NUM_NODES];
+          const curr = ball.nodes[i];
+
+          const neighborAvg = (prev.rOffset + next.rOffset) * 0.5;
+          curr.rVel += (neighborAvg - curr.rOffset) * 0.3;
+          if (curr.rOffset >= -1) {
+            curr.rOffset += bulge * 0.075;
+          }
+        }
+      }
+
+      // Update world coordinates & tangent angles
+      for (let i = 0; i < NUM_NODES; i++) {
+        const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
+        const r = ball.radius + (ball.nodes[i].rOffset || 0);
+        ball.nodes[i].wx = ball.x + Math.cos(theta) * r;
+        ball.nodes[i].wy = ball.y + Math.sin(theta) * r;
+      }
+
+      for (let i = 0; i < NUM_NODES; i++) {
+        const prev = ball.nodes[(i - 1 + NUM_NODES) % NUM_NODES];
+        const next = ball.nodes[(i + 1) % NUM_NODES];
+        ball.nodes[i].wAngle = Math.atan2(next.wy - prev.wy, next.wx - prev.wx);
+      }
+
+      // Check if user pushed hard enough into the frame to pop the ball open
+      const crushRatio = maxNodeCrush / ball.radius;
+      if (ball.isDragging && crushRatio > 0.42) {
+        ball.strain += (crushRatio - 0.38) * 0.085;
+        if (crushRatio > 0.68 || ball.strain >= 1.0) {
+          triggerBallCrackOpen();
+        }
+      } else {
+        ball.strain = Math.max(0, ball.strain - 0.05);
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 7. RENDER LOOP
+    // ---------------------------------------------------------
+    function render(now) {
+      updatePhysics(now || performance.now());
+
+      ctx.clearRect(0, 0, W, H);
+
+      const fontSize = Math.min(W, H) < 600 ? 15 : 19;
+      ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", sans-serif`;
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      for (let i = 0; i < NUM_NODES; i++) {
+        const n = ball.nodes[i];
+        if (!Number.isFinite(n.wx) || !Number.isFinite(n.wy)) continue;
+
+        let jitterX = 0;
+        let jitterY = 0;
+        let jitterRot = 0;
+        if (ball.state === 'intact' && ball.strain > 0.15) {
+          const mag = ball.strain * 3.5;
+          jitterX = (Math.random() - 0.5) * mag;
+          jitterY = (Math.random() - 0.5) * mag;
+          jitterRot = (Math.random() - 0.5) * (ball.strain * 0.18);
+        }
+
+        ctx.save();
+        ctx.translate(n.wx + jitterX, n.wy + jitterY);
+        ctx.rotate((n.wAngle || 0) + jitterRot);
+        ctx.fillText(n.char, 0, 0);
+        ctx.restore();
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
