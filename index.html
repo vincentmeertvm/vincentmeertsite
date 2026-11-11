@@ -29,6 +29,10 @@
       cursor: grabbing;
     }
 
+    body.shattered {
+      cursor: pointer;
+    }
+
     canvas {
       display: block;
       width: 100vw;
@@ -88,7 +92,7 @@
     const BASE_RADIUS = Math.min(W, H) < 600 ? 115 : 150;
 
     // ---------------------------------------------------------
-    // 2. WEB AUDIO SYNTH (BOUNCE, STRAIN CRACKLE, SHATTER)
+    // 2. WEB AUDIO SYNTH (BOUNCE & SHATTER)
     // ---------------------------------------------------------
     let audioCtx = null;
     function unlockAudio() {
@@ -97,7 +101,6 @@
       }
       if (audioCtx.state === 'suspended') audioCtx.resume();
     }
-    window.addEventListener('pointerdown', unlockAudio);
 
     function playBounceSound(intensity) {
       if (!audioCtx) return;
@@ -123,7 +126,6 @@
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
 
-      // Crisp snap + low burst
       const bufferSize = audioCtx.sampleRate * 0.16;
       const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
       const data = buffer.getChannelData(0);
@@ -152,23 +154,24 @@
     }
 
     // ---------------------------------------------------------
-    // 3. BALL STATE & SOFT-BODY PERIMETER NODES
+    // 3. BALL STATE & PERIMETER NODES
     // ---------------------------------------------------------
     const ball = {
-      x: W * 0.35,
-      y: H * 0.65,
-      vx: 6.2,
-      vy: -5.4,
+      x: W * 0.5,
+      y: H * 0.5,
+      vx: 0,           // Stationary until moved by user
+      vy: 0,           // Stationary until moved by user
       radius: BASE_RADIUS,
       angle: -0.5,
-      omega: 0.012,
+      omega: 0,        // Stationary rotation until moved
       isDragging: false,
       dragOffsetX: 0,
       dragOffsetY: 0,
       lastWallHit: 0,
-      strain: 0,         // Builds up when user crushes ball hard against frame
-      crackedOpen: false, // True when ball shatters into loose letters
-      crackTimer: 0,
+      wasTouchingEdge: false,
+      strain: 0,
+      state: 'intact', // 'intact' | 'shattered' | 'reforming'
+      reformStart: 0,
       nodes: []
     };
 
@@ -177,7 +180,6 @@
         char: RING_TEXT[i],
         rOffset: 0,
         rVel: 0,
-        // World coordinates & free-body state when ball cracks open
         wx: 0,
         wy: 0,
         wAngle: 0,
@@ -188,7 +190,7 @@
     }
 
     // ---------------------------------------------------------
-    // 4. POINTER & DRAG INTERACTION (NO HOVER BLOBBING)
+    // 4. POINTER INTERACTION & CLICK-TO-RESPAWN
     // ---------------------------------------------------------
     const pointer = {
       x: W * 0.5,
@@ -201,17 +203,35 @@
     };
 
     window.addEventListener('pointerdown', (e) => {
+      unlockAudio();
       pointer.down = true;
       pointer.x = pointer.px = e.clientX;
       pointer.y = pointer.py = e.clientY;
 
-      if (ball.crackedOpen) return;
+      // If ball is popped/shattered, clicking anywhere respawns it
+      if (ball.state === 'shattered') {
+        const margin = ball.radius + 16;
+        ball.x = Math.max(margin, Math.min(W - margin, e.clientX));
+        ball.y = Math.max(margin, Math.min(H - margin, e.clientY));
+        ball.vx = 0;
+        ball.vy = 0;
+        ball.omega = 0;
+        ball.state = 'reforming';
+        ball.reformStart = performance.now();
+        document.body.classList.remove('shattered');
+        playBounceSound(10);
+        return;
+      }
+
+      if (ball.state !== 'intact') return;
 
       const dist = Math.hypot(pointer.x - ball.x, pointer.y - ball.y);
       if (dist <= ball.radius * 1.15) {
         ball.isDragging = true;
         ball.dragOffsetX = ball.x - pointer.x;
         ball.dragOffsetY = ball.y - pointer.y;
+        ball.vx = 0;
+        ball.vy = 0;
         document.body.classList.add('dragging');
       }
     });
@@ -226,32 +246,31 @@
       if (ball.isDragging) {
         ball.isDragging = false;
         document.body.classList.remove('dragging');
-        ball.vx = Math.max(-32, Math.min(32, pointer.vx * 0.85));
-        ball.vy = Math.max(-32, Math.min(32, pointer.vy * 0.85));
+        // Transfer flick velocity when released
+        ball.vx = Math.max(-34, Math.min(34, pointer.vx * 0.85));
+        ball.vy = Math.max(-34, Math.min(34, pointer.vy * 0.85));
       }
     });
 
     // ---------------------------------------------------------
-    // 5. CRACK OPEN THE BALL OF TEXT
+    // 5. POP / SHATTER THE BALL OF TEXT
     // ---------------------------------------------------------
-    function triggerBallCrackOpen(now) {
-      ball.crackedOpen = true;
-      ball.crackTimer = now;
+    function triggerBallCrackOpen() {
+      ball.state = 'shattered';
       ball.isDragging = false;
       ball.strain = 0;
+      ball.vx = 0;
+      ball.vy = 0;
+      ball.omega = 0;
       document.body.classList.remove('dragging');
+      document.body.classList.add('shattered');
 
       playShatterSound();
       cycleBackgroundColor();
 
-      // Keep center inside safe bounds for eventual reassembly
-      const safeMargin = ball.radius + 20;
       const burstX = ball.x;
       const burstY = ball.y;
-      ball.x = Math.max(safeMargin, Math.min(W - safeMargin, ball.x));
-      ball.y = Math.max(safeMargin, Math.min(H - safeMargin, ball.y));
 
-      // Pop every letter outward from the fractured ring
       for (let i = 0; i < NUM_NODES; i++) {
         const n = ball.nodes[i];
         const dx = n.wx - burstX;
@@ -267,14 +286,10 @@
         n.rOffset = 0;
         n.rVel = 0;
       }
-
-      // Give the core ball a gentle drift velocity for when it reforms
-      ball.vx = (W * 0.5 - burstX) * 0.025;
-      ball.vy = (H * 0.5 - burstY) * 0.025;
     }
 
     // ---------------------------------------------------------
-    // 6. PHYSICS STEP (EDGE INDENTATION, WALL COLOR, SHATTER)
+    // 6. PHYSICS STEP
     // ---------------------------------------------------------
     function updatePhysics(now) {
       pointer.vx = pointer.x - pointer.px;
@@ -282,76 +297,78 @@
       pointer.px = pointer.x;
       pointer.py = pointer.y;
 
-      // STATE A: BALL IS CRACKED OPEN INTO LOOSE TUMBLING LETTERS
-      if (ball.crackedOpen) {
-        const elapsed = (now - ball.crackTimer) / 1000;
-        ball.angle += ball.omega;
-
-        // First 1.4s: letters fly, tumble, and bounce off the screen edges
-        // Next 0.8s: letters smoothly magnetize back into the rotating circle
-        const reformDuration = 0.85;
-        const freeDuration = 1.35;
-
+      // STATE 1: SHATTERED (WAITS INDEFINITELY UNTIL USER CLICKS)
+      if (ball.state === 'shattered') {
+        const pad = 12;
         for (let i = 0; i < NUM_NODES; i++) {
           const n = ball.nodes[i];
+          n.vy += 0.32; // Gravity
+          n.vx *= 0.985;
+          n.vy *= 0.985;
+          n.wx += n.vx;
+          n.wy += n.vy;
+          n.wAngle += n.vRot;
 
-          if (elapsed < freeDuration) {
-            n.vy += 0.28; // Gravity on shattered letters
-            n.vx *= 0.985;
-            n.vy *= 0.985;
-            n.wx += n.vx;
-            n.wy += n.vy;
-            n.wAngle += n.vRot;
-
-            // Letters bounce off viewport limits
-            const pad = 10;
-            if (n.wx < pad) { n.wx = pad; n.vx = Math.abs(n.vx) * 0.75; }
-            if (n.wx > W - pad) { n.wx = W - pad; n.vx = -Math.abs(n.vx) * 0.75; }
-            if (n.wy < pad) { n.wy = pad; n.vy = Math.abs(n.vy) * 0.75; }
-            if (n.wy > H - pad) { n.wy = H - pad; n.vy = -Math.abs(n.vy) * 0.75; }
-          } else {
-            // Reassemble smoothly back into the text ring
-            const t = Math.min(1, (elapsed - freeDuration) / reformDuration);
-            const ease = 1 - Math.pow(1 - t, 3);
-
-            const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
-            const targetX = ball.x + Math.cos(theta) * ball.radius;
-            const targetY = ball.y + Math.sin(theta) * ball.radius;
-            const targetAngle = theta + Math.PI * 0.5;
-
-            n.wx += (targetX - n.wx) * (0.12 + ease * 0.25);
-            n.wy += (targetY - n.wy) * (0.12 + ease * 0.25);
-
-            // Shortest angular interpolation
-            let diff = ((targetAngle - n.wAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-            n.wAngle += diff * (0.15 + ease * 0.25);
+          if (n.wx < pad) { n.wx = pad; n.vx = Math.abs(n.vx) * 0.7; }
+          if (n.wx > W - pad) { n.wx = W - pad; n.vx = -Math.abs(n.vx) * 0.7; }
+          if (n.wy < pad) { n.wy = pad; n.vy = Math.abs(n.vy) * 0.7; }
+          if (n.wy > H - pad) {
+            n.wy = H - pad;
+            n.vy = -Math.abs(n.vy) * 0.55;
+            n.vx *= 0.88;
+            n.vRot *= 0.85;
+            if (Math.abs(n.vy) < 0.4) n.vy = 0;
           }
-        }
-
-        if (elapsed >= freeDuration + reformDuration) {
-          ball.crackedOpen = false;
         }
         return;
       }
 
-      // STATE B: INTACT SOFT-BODY RING BOUNCING & INDENTING AT SCREEN LIMITS
+      // STATE 2: REFORMING AFTER USER CLICK
+      if (ball.state === 'reforming') {
+        const duration = 0.55;
+        const t = Math.min(1, (now - ball.reformStart) / 1000 / duration);
+        const ease = 1 - Math.pow(1 - t, 3);
+
+        for (let i = 0; i < NUM_NODES; i++) {
+          const n = ball.nodes[i];
+          const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
+          const targetX = ball.x + Math.cos(theta) * ball.radius;
+          const targetY = ball.y + Math.sin(theta) * ball.radius;
+          const targetAngle = theta + Math.PI * 0.5;
+
+          n.wx += (targetX - n.wx) * (0.15 + ease * 0.35);
+          n.wy += (targetY - n.wy) * (0.15 + ease * 0.35);
+
+          let diff = ((targetAngle - n.wAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+          n.wAngle += diff * (0.18 + ease * 0.35);
+          n.rOffset = 0;
+          n.rVel = 0;
+        }
+
+        if (t >= 1) {
+          ball.state = 'intact';
+        }
+        return;
+      }
+
+      // STATE 3: INTACT BALL
       const canTriggerWallColor = (now - ball.lastWallHit) > 110;
 
       if (ball.isDragging) {
+        // Follow user drag (can be pushed into/over the screen edge to indent)
         const targetX = pointer.x + ball.dragOffsetX;
         const targetY = pointer.y + ball.dragOffsetY;
-        ball.vx = (targetX - ball.x) * 0.38;
-        ball.vy = (targetY - ball.y) * 0.38;
+        ball.vx = (targetX - ball.x) * 0.42;
+        ball.vy = (targetY - ball.y) * 0.42;
         ball.x += ball.vx;
         ball.y += ball.vy;
-        ball.omega *= 0.94;
+        ball.omega *= 0.9;
 
-        // Change background color when user first pushes ball into a screen edge
         const touchingEdge =
-          ball.x - ball.radius <= 2 ||
-          ball.x + ball.radius >= W - 2 ||
-          ball.y - ball.radius <= 2 ||
-          ball.y + ball.radius >= H - 2;
+          ball.x - ball.radius <= 0 ||
+          ball.x + ball.radius >= W ||
+          ball.y - ball.radius <= 0 ||
+          ball.y + ball.radius >= H;
 
         if (touchingEdge && !ball.wasTouchingEdge && canTriggerWallColor) {
           cycleBackgroundColor();
@@ -361,41 +378,42 @@
         ball.wasTouchingEdge = touchingEdge;
       } else {
         ball.wasTouchingEdge = false;
+
+        // Move & naturally decelerate to a stop unless moved again
         ball.x += ball.vx;
         ball.y += ball.vy;
+        ball.vx *= 0.992;
+        ball.vy *= 0.992;
+        ball.omega *= 0.992;
 
-        // Maintain perpetual edge-to-edge cruise velocity
-        const speed = Math.hypot(ball.vx, ball.vy);
-        const minCruise = 4.6;
-        if (speed > 0.01 && speed < minCruise) {
-          ball.vx = (ball.vx / speed) * minCruise;
-          ball.vy = (ball.vy / speed) * minCruise;
-        } else if (speed > minCruise) {
-          ball.vx *= 0.9985;
-          ball.vy *= 0.9985;
+        if (Math.hypot(ball.vx, ball.vy) < 0.05) {
+          ball.vx = 0;
+          ball.vy = 0;
+        }
+        if (Math.abs(ball.omega) < 0.0002) {
+          ball.omega = 0;
         }
 
-        // Bounce off Left / Right limits + Change Background Color
-        // Allow partial penetration during high-speed impacts so the edge visibly indents the ball
-        if (ball.x - ball.radius < 0) {
-          const pen = ball.radius - ball.x;
-          if (ball.vx < 0 && pen > Math.min(28, Math.abs(ball.vx) * 2.2)) {
+        // RIGID BOUNCE OFF WALLS (Does NOT indent when bouncing off sides in free flight)
+        if (ball.x - ball.radius <= 0) {
+          ball.x = ball.radius;
+          if (ball.vx < 0) {
             const impact = Math.abs(ball.vx);
-            ball.vx = Math.abs(ball.vx) * 0.95;
-            ball.omega = ball.vy * 0.0018;
-            if (canTriggerWallColor) {
+            ball.vx = Math.abs(ball.vx) * 0.88;
+            ball.omega = ball.vy * 0.0016;
+            if (canTriggerWallColor && impact > 0.4) {
               cycleBackgroundColor();
               playBounceSound(impact);
               ball.lastWallHit = now;
             }
           }
-        } else if (ball.x + ball.radius > W) {
-          const pen = (ball.x + ball.radius) - W;
-          if (ball.vx > 0 && pen > Math.min(28, Math.abs(ball.vx) * 2.2)) {
+        } else if (ball.x + ball.radius >= W) {
+          ball.x = W - ball.radius;
+          if (ball.vx > 0) {
             const impact = Math.abs(ball.vx);
-            ball.vx = -Math.abs(ball.vx) * 0.95;
-            ball.omega = -ball.vy * 0.0018;
-            if (canTriggerWallColor) {
+            ball.vx = -Math.abs(ball.vx) * 0.88;
+            ball.omega = -ball.vy * 0.0016;
+            if (canTriggerWallColor && impact > 0.4) {
               cycleBackgroundColor();
               playBounceSound(impact);
               ball.lastWallHit = now;
@@ -403,178 +421,22 @@
           }
         }
 
-        // Bounce off Top / Bottom limits + Change Background Color
-        if (ball.y - ball.radius < 0) {
-          const pen = ball.radius - ball.y;
-          if (ball.vy < 0 && pen > Math.min(28, Math.abs(ball.vy) * 2.2)) {
+        if (ball.y - ball.radius <= 0) {
+          ball.y = ball.radius;
+          if (ball.vy < 0) {
             const impact = Math.abs(ball.vy);
-            ball.vy = Math.abs(ball.vy) * 0.95;
-            ball.omega = -ball.vx * 0.0018;
-            if (canTriggerWallColor) {
+            ball.vy = Math.abs(ball.vy) * 0.88;
+            ball.omega = -ball.vx * 0.0016;
+            if (canTriggerWallColor && impact > 0.4) {
               cycleBackgroundColor();
               playBounceSound(impact);
               ball.lastWallHit = now;
             }
           }
-        } else if (ball.y + ball.radius > H) {
-          const pen = (ball.y + ball.radius) - H;
-          if (ball.vy > 0 && pen > Math.min(28, Math.abs(ball.vy) * 2.2)) {
+        } else if (ball.y + ball.radius >= H) {
+          ball.y = H - ball.radius;
+          if (ball.vy > 0) {
             const impact = Math.abs(ball.vy);
-            ball.vy = -Math.abs(ball.vy) * 0.95;
-            ball.omega = ball.vx * 0.0018;
-            if (canTriggerWallColor) {
-              cycleBackgroundColor();
-              playBounceSound(impact);
-              ball.lastWallHit = now;
-            }
-          }
-        }
-      }
-
-      ball.angle += ball.omega;
-
-      // ---------------------------------------------------------
-      // SOFT-BODY INDENTATION AGAINST SCREEN LIMITS ONLY
-      // ---------------------------------------------------------
-      let totalCrush = 0;
-      let maxNodeCrush = 0;
-      const wallPad = 10;
-
-      for (let i = 0; i < NUM_NODES; i++) {
-        const node = ball.nodes[i];
-        const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
-        const cosT = Math.cos(theta);
-        const sinT = Math.sin(theta);
-
-        const idealR = ball.radius;
-        let currentR = idealR + node.rOffset;
-        const wx = ball.x + cosT * currentR;
-        const wy = ball.y + sinT * currentR;
-
-        // Constrain every character strictly inside the viewport walls
-        let allowedR = currentR;
-        if (wx < wallPad && cosT < -0.02) {
-          allowedR = Math.min(allowedR, (wallPad - ball.x) / cosT);
-        }
-        if (wx > W - wallPad && cosT > 0.02) {
-          allowedR = Math.min(allowedR, (W - wallPad - ball.x) / cosT);
-        }
-        if (wy < wallPad && sinT < -0.02) {
-          allowedR = Math.min(allowedR, (wallPad - ball.y) / sinT);
-        }
-        if (wy > H - wallPad && sinT > 0.02) {
-          allowedR = Math.min(allowedR, (H - wallPad - ball.y) / sinT);
-        }
-
-        // Measure how deeply this side of the ball is indented by the screen limit
-        const idealUnclampedX = ball.x + cosT * idealR;
-        const idealUnclampedY = ball.y + sinT * idealR;
-        const overLeft = Math.max(0, wallPad - idealUnclampedX);
-        const overRight = Math.max(0, idealUnclampedX - (W - wallPad));
-        const overTop = Math.max(0, wallPad - idealUnclampedY);
-        const overBottom = Math.max(0, idealUnclampedY - (H - wallPad));
-        const rawCrush = Math.max(overLeft, overRight, overTop, overBottom);
-
-        if (rawCrush > 0) {
-          totalCrush += rawCrush;
-          if (rawCrush > maxNodeCrush) maxNodeCrush = rawCrush;
-        }
-
-        if (allowedR < currentR) {
-          node.rOffset = Math.max(-idealR * 0.78, allowedR - idealR);
-          node.rVel *= 0.35;
-        }
-
-        // Spring restoration back to true circle
-        const springK = 0.18;
-        const damping = 0.78;
-        node.rVel += -node.rOffset * springK;
-        node.rVel *= damping;
-        node.rOffset += node.rVel;
-      }
-
-      // Volume preservation: when pressed against a wall, the adjacent sides bulge out smoothly
-      const bulge = Math.min(34, (totalCrush / NUM_NODES) * 0.75);
-      for (let i = 0; i < NUM_NODES; i++) {
-        const prev = ball.nodes[(i - 1 + NUM_NODES) % NUM_NODES];
-        const next = ball.nodes[(i + 1) % NUM_NODES];
-        const curr = ball.nodes[i];
-
-        const neighborAvg = (prev.rOffset + next.rOffset) * 0.5;
-        curr.rVel += (neighborAvg - curr.rOffset) * 0.3;
-        if (curr.rOffset >= -1) {
-          curr.rOffset += bulge * 0.075;
-        }
-      }
-
-      // Update world coordinates & tangent angles for each character
-      for (let i = 0; i < NUM_NODES; i++) {
-        const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
-        const r = ball.radius + ball.nodes[i].rOffset;
-        ball.nodes[i].wx = ball.x + Math.cos(theta) * r;
-        ball.nodes[i].wy = ball.y + Math.sin(theta) * r;
-      }
-
-      for (let i = 0; i < NUM_NODES; i++) {
-        const prev = ball.nodes[(i - 1 + NUM_NODES) % NUM_NODES];
-        const next = ball.nodes[(i + 1) % NUM_NODES];
-        ball.nodes[i].wAngle = Math.atan2(next.wy - prev.wy, next.wx - prev.wx);
-      }
-
-      // ---------------------------------------------------------
-      // CHECK IF USER PUSHED HARD ENOUGH TO CRACK THE BALL OPEN
-      // ---------------------------------------------------------
-      const crushRatio = maxNodeCrush / ball.radius;
-      if (crushRatio > 0.42) {
-        // Build strain faster the deeper the user squashes the ball into the wall
-        ball.strain += (crushRatio - 0.38) * 0.085;
-        if (crushRatio > 0.68 || ball.strain >= 1.0) {
-          triggerBallCrackOpen(now);
-        }
-      } else {
-        ball.strain = Math.max(0, ball.strain - 0.04);
-      }
-    }
-
-    // ---------------------------------------------------------
-    // 7. RENDER LOOP
-    // ---------------------------------------------------------
-    function render(now) {
-      updatePhysics(now);
-
-      ctx.clearRect(0, 0, W, H);
-
-      const fontSize = Math.min(W, H) < 600 ? 15 : 19;
-      ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", sans-serif`;
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      for (let i = 0; i < NUM_NODES; i++) {
-        const n = ball.nodes[i];
-
-        // Subtle high-pressure jitter on the letters right before the ball cracks open
-        let jitterX = 0;
-        let jitterY = 0;
-        let jitterRot = 0;
-        if (!ball.crackedOpen && ball.strain > 0.15) {
-          const mag = ball.strain * 3.5;
-          jitterX = (Math.random() - 0.5) * mag;
-          jitterY = (Math.random() - 0.5) * mag;
-          jitterRot = (Math.random() - 0.5) * (ball.strain * 0.18);
-        }
-
-        ctx.save();
-        ctx.translate(n.wx + jitterX, n.wy + jitterY);
-        ctx.rotate(n.wAngle + jitterRot);
-        ctx.fillText(n.char, 0, 0);
-        ctx.restore();
-      }
-
-      requestAnimationFrame(render);
-    }
-
-    requestAnimationFrame(render);
-  </script>
-</body>
-</html>
+            ball.vy = -Math.abs(ball.vy) * 0.88;
+            ball.omega = ball.vx * 0.0016;
+            if (canTriggerWall
