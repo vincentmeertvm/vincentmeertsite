@@ -64,35 +64,39 @@
     window.addEventListener('resize', resize);
 
     // ---------------------------------------------------------
-    // 1. CURATED BACKGROUND COLOR PALETTE & RING TEXT
+    // 1. PALETTE, TEXT COLOR TOGGLE & RING TEXT
     // ---------------------------------------------------------
     const BG_PALETTE = [
       '#7b3fe4', // Electric Violet
-      '#2563eb', // Cobalt Blue
+      '#3b82f6', // Vibrant Cobalt
       '#ff4d2d', // International Orange
-      '#059669', // Deep Emerald
-      '#db2777', // Vibrant Magenta
-      '#4f46e5', // Ultramarine Indigo
-      '#d97706', // Warm Amber
-      '#0d9488', // Deep Teal
-      '#e11d48', // Crimson Rose
-      '#1e293b'  // Midnight Slate
+      '#10b981', // Bright Emerald
+      '#ec4899', // Hot Magenta
+      '#6366f1', // Indigo
+      '#f59e0b', // Warm Amber
+      '#14b8a6', // Teal
+      '#f43f5e', // Coral Rose
+      '#06b6d4'  // Electric Cyan
     ];
     let currentColorIdx = 0;
+    let isTextWhite = true;
 
-    function cycleBackgroundColor() {
+    function triggerEdgeColorShift() {
       let nextIdx = currentColorIdx;
       while (nextIdx === currentColorIdx) {
         nextIdx = Math.floor(Math.random() * BG_PALETTE.length);
       }
       currentColorIdx = nextIdx;
       document.body.style.backgroundColor = BG_PALETTE[currentColorIdx];
+
+      // Toggle text color strictly between white and black on every edge hit
+      isTextWhite = !isTextWhite;
     }
 
-    const RING_TEXT = "vincent meert drives growth in tech & ai. previously, he worked across automotive ict & more   ";
+    const RING_TEXT = "vincent meert drives growth in tech & ai. previously across wpp, automotive, ict & banking.   ";
     const NUM_NODES = RING_TEXT.length;
     const BASE_RADIUS = Math.min(W, H) < 600 ? 115 : 150;
-    
+
     // Moon-like low gravity & gentle readable rotation cap
     const GRAVITY = 0.14;
     const MAX_OMEGA = 0.045;
@@ -167,11 +171,11 @@
     const ball = {
       x: W * 0.5,
       y: H * 0.42,     // Starts in middle of page and floats down with a soft bounce
-      vx: 0.45,        // Subtle horizontal drift on initial drop
+      vx: 0.45,
       vy: 0,
       radius: BASE_RADIUS,
       angle: -0.5,
-      omega: 0.006,    // Calm, readable initial rotation
+      omega: 0.006,
       isDragging: false,
       dragOffsetX: 0,
       dragOffsetY: 0,
@@ -211,7 +215,6 @@
       down: false
     };
 
-    // Mouse wheel / trackpad scroll rotates the wheel at a comfortable reading speed
     window.addEventListener('wheel', (e) => {
       if (ball.state === 'intact') {
         ball.omega += (e.deltaY + e.deltaX) * 0.00006;
@@ -225,7 +228,6 @@
       pointer.x = pointer.px = e.clientX;
       pointer.y = pointer.py = e.clientY;
 
-      // If ball is popped/shattered, clicking anywhere respawns it at cursor and lets it float down
       if (ball.state === 'shattered') {
         const margin = ball.radius + 16;
         ball.x = Math.max(margin, Math.min(W - margin, e.clientX));
@@ -264,11 +266,9 @@
         ball.isDragging = false;
         document.body.classList.remove('dragging');
 
-        // Smooth throw velocity suited for moon gravity
         ball.vx = Math.max(-22, Math.min(22, pointer.vx * 0.65));
         ball.vy = Math.max(-22, Math.min(22, pointer.vy * 0.65));
 
-        // Gentle, readable spin torque on release
         const rx = pointer.x - ball.x;
         const ry = pointer.y - ball.y;
         const crossTorque = (rx * pointer.vy - ry * pointer.vx) / (ball.radius * ball.radius);
@@ -292,7 +292,7 @@
       document.body.classList.add('shattered');
 
       playShatterSound();
-      cycleBackgroundColor();
+      triggerEdgeColorShift();
 
       const burstX = ball.x;
       const burstY = ball.y;
@@ -328,7 +328,7 @@
         const pad = 12;
         for (let i = 0; i < NUM_NODES; i++) {
           const n = ball.nodes[i];
-          n.vy += 0.12; // Moon gravity on shattered letters
+          n.vy += 0.12;
           n.vx *= 0.99;
           n.vy *= 0.99;
           n.wx += n.vx;
@@ -392,7 +392,6 @@
         ball.x += ball.vx;
         ball.y += ball.vy;
 
-        // Subtle, controlled rotation while dragging
         const rx = pointer.x - ball.x;
         const ry = pointer.y - ball.y;
         const dragTorque = (rx * pointer.vy - ry * pointer.vx) / (ball.radius * ball.radius);
@@ -406,7 +405,7 @@
           ball.y + ball.radius >= H;
 
         if (touchingEdge && !ball.wasTouchingEdge && canTriggerWallColor) {
-          cycleBackgroundColor();
+          triggerEdgeColorShift();
           playBounceSound(6);
           ball.lastWallHit = now;
         }
@@ -414,13 +413,10 @@
       } else {
         ball.wasTouchingEdge = false;
 
-        // Apply light, moon-like downward gravity
         ball.vy += GRAVITY;
-
         ball.x += ball.vx;
         ball.y += ball.vy;
 
-        // Smooth air resistance & long-coasting readable spin
         ball.vx *= 0.996;
         ball.omega *= 0.997;
 
@@ -432,7 +428,7 @@
             ball.vx = Math.abs(ball.vx) * 0.84;
             ball.omega += (ball.vy * 0.0007) + (impact * 0.0008);
             if (canTriggerWallColor && impact > 0.6) {
-              cycleBackgroundColor();
+              triggerEdgeColorShift();
               playBounceSound(impact);
               ball.lastWallHit = now;
             }
@@ -446,7 +442,7 @@
             ball.vx = -Math.abs(ball.vx) * 0.84;
             ball.omega += (-ball.vy * 0.0007) - (impact * 0.0008);
             if (canTriggerWallColor && impact > 0.6) {
-              cycleBackgroundColor();
+              triggerEdgeColorShift();
               playBounceSound(impact);
               ball.lastWallHit = now;
             }
@@ -461,7 +457,7 @@
             ball.vy = Math.abs(ball.vy) * 0.8;
             ball.omega += -ball.vx * 0.0008;
             if (canTriggerWallColor && impact > 0.6) {
-              cycleBackgroundColor();
+              triggerEdgeColorShift();
               playBounceSound(impact);
               ball.lastWallHit = now;
             }
@@ -475,12 +471,12 @@
             const impact = Math.abs(ball.vy);
 
             if (impact > 0.75) {
-              ball.vy = -impact * 0.74; // Floaty, cushioned moon bounce
+              ball.vy = -impact * 0.74;
               ball.vx += ball.omega * ball.radius * 0.06;
               ball.omega += (ball.vx / ball.radius) * 0.12 + (impact * 0.0008 * (ball.omega >= 0 ? 1 : -1));
 
               if (canTriggerWallColor && impact > 1.1) {
-                cycleBackgroundColor();
+                triggerEdgeColorShift();
                 playBounceSound(impact);
                 ball.lastWallHit = now;
               }
@@ -489,7 +485,6 @@
             }
           }
 
-          // Gentle rolling along the floor
           ball.vx *= 0.988;
           const targetRollOmega = (ball.vx / ball.radius) * 0.85;
           if (Math.abs(ball.vx) > 0.08) {
@@ -500,7 +495,6 @@
           }
         }
 
-        // Enforce readable spin speed limit
         ball.omega = Math.max(-MAX_OMEGA, Math.min(MAX_OMEGA, ball.omega));
 
         if (Math.abs(ball.omega) < 0.0001 && Math.abs(ball.vx) < 0.04) {
@@ -563,7 +557,6 @@
           }
         }
 
-        // Spring back to a pure circle
         const springK = 0.22;
         const damping = 0.76;
         node.rVel += -node.rOffset * springK;
@@ -571,7 +564,6 @@
         node.rOffset += node.rVel;
       }
 
-      // Smooth neighbor coupling & subtle side bulge while held against the frame
       if (ball.isDragging && totalCrush > 0) {
         const bulge = Math.min(32, (totalCrush / NUM_NODES) * 0.75);
         for (let i = 0; i < NUM_NODES; i++) {
@@ -587,7 +579,6 @@
         }
       }
 
-      // Update world coordinates & tangent angles
       for (let i = 0; i < NUM_NODES; i++) {
         const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
         const r = ball.radius + (ball.nodes[i].rOffset || 0);
@@ -601,7 +592,6 @@
         ball.nodes[i].wAngle = Math.atan2(next.wy - prev.wy, next.wx - prev.wx);
       }
 
-      // Check if user pushed hard enough into the frame to pop the ball open
       const crushRatio = maxNodeCrush / ball.radius;
       if (ball.isDragging && crushRatio > 0.42) {
         ball.strain += (crushRatio - 0.38) * 0.085;
@@ -623,7 +613,7 @@
 
       const fontSize = Math.min(W, H) < 600 ? 15 : 19;
       ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", sans-serif`;
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = isTextWhite ? '#ffffff' : '#000000';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
