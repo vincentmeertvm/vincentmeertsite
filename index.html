@@ -5,28 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Vincent Meert</title>
   <style>
-    :root {
-      --bg: #fafafa;
-      --fg: #171717;
-      --muted: #8e8e93;
-      --border: rgba(0, 0, 0, 0.08);
-      --surface: rgba(255, 255, 255, 0.85);
-      --accent: #000000;
-      --font: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-      --mono: "SF Mono", ui-monospace, Menlo, Monaco, monospace;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0d0d0d;
-        --fg: #f5f5f7;
-        --muted: #7c7c82;
-        --border: rgba(255, 255, 255, 0.1);
-        --surface: rgba(24, 24, 26, 0.85);
-        --accent: #ffffff;
-      }
-    }
-
     * {
       box-sizing: border-box;
       margin: 0;
@@ -39,489 +17,30 @@
       width: 100vw;
       height: 100vh;
       overflow: hidden;
-      background: var(--bg);
-      color: var(--fg);
-      font-family: var(--font);
+      background-color: #7b3fe4; /* Exact electric violet from screenshot */
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "Helvetica Neue", sans-serif;
       -webkit-font-smoothing: antialiased;
-      cursor: none;
       touch-action: none;
+      cursor: grab;
     }
 
-    /* Physics Canvas */
-    #canvas {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 2;
-      pointer-events: none;
+    body.dragging {
+      cursor: grabbing;
     }
 
-    /* Centered Name & Links (Acts as physical collider) */
-    .center-stage {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 3;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-      pointer-events: auto;
-    }
-
-    #name-box {
-      font-size: 16px;
-      font-weight: 500;
-      letter-spacing: -0.01em;
-      padding: 10px 18px;
-      border-radius: 999px;
-      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-      will-change: transform;
-      cursor: none;
-    }
-
-    .links-row {
-      display: flex;
-      gap: 16px;
-      font-size: 13px;
-      color: var(--muted);
-    }
-
-    .links-row a {
-      color: var(--muted);
-      text-decoration: none;
-      transition: color 0.15s ease;
-      cursor: none;
-    }
-
-    .links-row a:hover {
-      color: var(--fg);
-    }
-
-    /* Top HUD (:15 & Score) */
-    .top-hud {
-      position: fixed;
-      top: 28px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 4;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      font-family: var(--mono);
-      font-size: 13px;
-      color: var(--muted);
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.25s ease;
-    }
-
-    .top-hud.visible {
-      opacity: 1;
-    }
-
-    .timer-badge {
-      color: var(--fg);
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .score-badge {
-      font-variant-numeric: tabular-nums;
-    }
-
-    /* Floating +1 */
-    .plus-one {
-      position: fixed;
-      font-family: var(--mono);
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--fg);
-      pointer-events: none;
-      z-index: 10;
-      animation: popUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-
-    @keyframes popUp {
-      0% { opacity: 1; transform: translate(-50%, 0) scale(0.85); }
-      100% { opacity: 0; transform: translate(-50%, -28px) scale(1.1); }
-    }
-
-    /* Bottom Bar */
-    .bottom-bar {
-      position: fixed;
-      bottom: 24px;
-      left: 28px;
-      right: 28px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      z-index: 5;
-      font-size: 12px;
-      color: var(--muted);
-      pointer-events: none;
-    }
-
-    .pill-btn {
-      pointer-events: auto;
-      background: var(--surface);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-family: var(--font);
-      font-size: 12px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      cursor: none;
-      transition: color 0.15s, border-color 0.15s, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-
-    .pill-btn:hover {
-      color: var(--fg);
-      border-color: var(--muted);
-      transform: scale(1.04);
-    }
-
-    .pill-btn:active {
-      transform: scale(0.96);
-    }
-
-    #sound-hint {
-      transition: opacity 0.3s ease;
-    }
-
-    /* Game Tuning Popover (goal size, puck friction) */
-    .popover {
-      position: fixed;
-      bottom: 64px;
-      right: 28px;
-      width: 240px;
-      background: var(--surface);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px 16px;
-      z-index: 15;
-      font-size: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      opacity: 0;
-      transform: translateY(8px) scale(0.96);
-      pointer-events: none;
-      transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-
-    .popover.open {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-      pointer-events: auto;
-    }
-
-    .slider-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .slider-label {
-      display: flex;
-      justify-content: space-between;
-      color: var(--muted);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .slider-label span:last-child {
-      color: var(--fg);
-      font-family: var(--mono);
-    }
-
-    input[type="range"] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-      outline: none;
-      cursor: none;
-    }
-
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: var(--fg);
-      cursor: none;
-      transition: transform 0.15s;
-    }
-
-    input[type="range"]::-webkit-slider-thumb:hover {
-      transform: scale(1.2);
-    }
-
-    .popover-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      padding-top: 4px;
-      border-top: 1px solid var(--border);
-    }
-
-    .text-btn {
-      background: none;
-      border: none;
-      color: var(--muted);
-      font-size: 12px;
-      font-family: var(--font);
-      cursor: none;
-      padding: 4px 8px;
-      border-radius: 6px;
-      transition: color 0.15s, background 0.15s;
-    }
-
-    .text-btn:hover {
-      color: var(--fg);
-      background: var(--border);
-    }
-
-    /* Post-Game & Leaderboard Modal */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 20;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0, 0, 0, 0.2);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s ease;
-    }
-
-    .modal-backdrop.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .modal-card {
-      width: 290px;
-      background: var(--surface);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      transform: scale(0.94);
-      transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-
-    .modal-backdrop.open .modal-card {
-      transform: scale(1);
-    }
-
-    .modal-header {
-      text-align: center;
-    }
-
-    .modal-score-big {
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--fg);
-    }
-
-    .modal-sub {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-
-    .sign-form {
-      display: flex;
-      gap: 6px;
-    }
-
-    .sign-input {
-      flex: 1;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 7px 10px;
-      color: var(--fg);
-      font-family: var(--mono);
-      font-size: 12px;
-      text-transform: uppercase;
-      outline: none;
-    }
-
-    .sign-input::placeholder {
-      text-transform: none;
-      color: var(--muted);
-      font-family: var(--font);
-    }
-
-    .lb-section-title {
-      font-size: 11px;
-      color: var(--muted);
-      display: flex;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 6px;
-    }
-
-    .lb-rows {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-family: var(--mono);
-      font-size: 12px;
-      max-height: 150px;
-      overflow-y: auto;
-    }
-
-    .lb-row {
-      display: flex;
-      justify-content: space-between;
-      color: var(--muted);
-    }
-
-    .lb-row.me {
-      color: var(--fg);
-      font-weight: 600;
-    }
-
-    .modal-footer {
-      display: flex;
-      justify-content: space-between;
-      padding-top: 6px;
-      border-top: 1px solid var(--border);
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
     }
   </style>
 </head>
 <body>
-
-  <!-- Top Timer & Goal Counter -->
-  <div class="top-hud" id="top-hud">
-    <span class="timer-badge" id="timer-text">:15</span>
-    <span class="score-badge" id="score-text">0 goals</span>
-  </div>
-
-  <!-- Minimalist Center Stage -->
-  <div class="center-stage">
-    <div id="name-box">Vincent Meert</div>
-    <div class="links-row">
-      <a href="mailto:vincent@meert.cc">email</a>
-      <a href="https://linkedin.com" target="_blank" rel="noopener">linkedin</a>
-    </div>
-  </div>
-
-  <!-- Leaderboard / Post-Game Modal -->
-  <div class="modal-backdrop" id="lb-modal">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-score-big" id="final-goals-text">0 goals</div>
-        <div class="modal-sub">in 15 seconds</div>
-      </div>
-
-      <form class="sign-form" id="sign-form">
-        <input
-          type="text"
-          id="initials-input"
-          class="sign-input"
-          maxlength="3"
-          placeholder="sign with your initials"
-          required
-        />
-        <button type="submit" class="pill-btn">sign</button>
-      </form>
-
-      <div>
-        <div class="lb-section-title">
-          <span>leaderboard</span>
-          <span>goals</span>
-        </div>
-        <ul class="lb-rows" id="lb-rows"></ul>
-      </div>
-
-      <div class="modal-footer">
-        <button class="text-btn" id="play-again-btn">play again</button>
-        <button class="text-btn" id="done-btn">done</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Game Settings Popover -->
-  <div class="popover" id="game-popover">
-    <div class="slider-group">
-      <div class="slider-label">
-        <span>goal size</span>
-        <span id="goal-size-label">2×</span>
-      </div>
-      <input type="range" id="goal-size-slider" min="1" max="4" step="0.5" value="2" />
-    </div>
-
-    <div class="slider-group">
-      <div class="slider-label">
-        <span>puck friction</span>
-        <span id="friction-label">4.0%</span>
-      </div>
-      <input type="range" id="friction-slider" min="0.5" max="10" step="0.5" value="4.0" />
-    </div>
-
-    <div class="popover-actions">
-      <button class="text-btn" id="reset-settings-btn">reset</button>
-      <button class="text-btn" id="save-settings-btn">save</button>
-    </div>
-  </div>
-
-  <!-- Bottom Bar -->
-  <div class="bottom-bar">
-    <button class="pill-btn" id="open-lb-pill">leaderboard</button>
-    <span id="sound-hint">tap anywhere for sound</span>
-    <button class="pill-btn" id="game-btn">game</button>
-  </div>
-
-  <!-- 2D Air Hockey / Bounce Canvas -->
-  <canvas id="canvas"></canvas>
+  <canvas id="stage"></canvas>
 
   <script>
-    const canvas = document.getElementById('canvas');
+    const canvas = document.getElementById('stage');
     const ctx = canvas.getContext('2d');
-
-    const nameBox = document.getElementById('name-box');
-    const topHud = document.getElementById('top-hud');
-    const timerText = document.getElementById('timer-text');
-    const scoreText = document.getElementById('score-text');
-    const soundHint = document.getElementById('sound-hint');
-
-    const gameBtn = document.getElementById('game-btn');
-    const gamePopover = document.getElementById('game-popover');
-    const goalSizeSlider = document.getElementById('goal-size-slider');
-    const goalSizeLabel = document.getElementById('goal-size-label');
-    const frictionSlider = document.getElementById('friction-slider');
-    const frictionLabel = document.getElementById('friction-label');
-    const resetSettingsBtn = document.getElementById('reset-settings-btn');
-    const saveSettingsBtn = document.getElementById('save-settings-btn');
-
-    const lbModal = document.getElementById('lb-modal');
-    const openLbPill = document.getElementById('open-lb-pill');
-    const finalGoalsText = document.getElementById('final-goals-text');
-    const signForm = document.getElementById('sign-form');
-    const initialsInput = document.getElementById('initials-input');
-    const lbRows = document.getElementById('lb-rows');
-    const playAgainBtn = document.getElementById('play-again-btn');
-    const doneBtn = document.getElementById('done-btn');
 
     let W = window.innerWidth;
     let H = window.innerHeight;
@@ -537,454 +56,540 @@
     resize();
     window.addEventListener('resize', resize);
 
-    // Web Audio API Sound Engine
+    // ---------------------------------------------------------
+    // 1. CIRCULAR TEXT & INTERACTIVE LINKS CONFIGURATION
+    // ---------------------------------------------------------
+    // Exact lowercase cadence and spacing matching your screenshot
+    const RING_TEXT = "vincent meert drives growth in tech & ai. previously, he worked across automotive ict & more   ";
+    
+    // Optional clickable segments along the spinning ring
+    const LINKS = [
+      { word: "vincent meert", url: "mailto:vincent@meert.cc" },
+      { word: "tech & ai", url: "https://linkedin.com" },
+      { word: "automotive", url: "https://linkedin.com" }
+    ];
+
+    // ---------------------------------------------------------
+    // 2. WEB AUDIO SYNTH (RUBBER THUD + GLASS CRACK)
+    // ---------------------------------------------------------
     let audioCtx = null;
     function unlockAudio() {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        soundHint.style.opacity = '0';
       }
       if (audioCtx.state === 'suspended') audioCtx.resume();
     }
     window.addEventListener('pointerdown', unlockAudio);
 
-    function playTone(freq, duration, type = 'sine', gainVal = 0.18) {
+    function playBounceSound(intensity) {
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
+      const vol = Math.min(0.45, Math.max(0.04, intensity / 22));
+
+      // Low rubbery membrane thud
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, now);
-      osc.frequency.exponentialRampToValueAtTime(freq * 0.45, now + duration);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(95 + intensity * 3.5, now);
+      osc.frequency.exponentialRampToValueAtTime(38, now + 0.14);
 
-      gain.gain.setValueAtTime(Math.min(0.35, gainVal), now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
 
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       osc.start(now);
-      osc.stop(now + duration);
+      osc.stop(now + 0.15);
     }
 
-    function playGoalChime() {
+    function playCrackSound(intensity) {
       if (!audioCtx) return;
-      playTone(587.33, 0.12, 'triangle', 0.22); // D5
-      setTimeout(() => playTone(880, 0.22, 'triangle', 0.25), 70); // A5
+      const now = audioCtx.currentTime;
+
+      // High-frequency crystalline fracture snap
+      const bufferSize = audioCtx.sampleRate * 0.09;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.25));
+      }
+
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(2400, now);
+      filter.Q.setValueAtTime(3.0, now);
+
+      const gain = audioCtx.createGain();
+      gain.gain.setValueAtTime(Math.min(0.5, intensity / 25), now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.09);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(audioCtx.destination);
+      noise.start(now);
     }
 
-    // Tunable Game Parameters (matches iansilber.com defaults)
-    let goalMultiplier = 2.0;
-    let baseGoalWidth = 90;
-    let puckFriction = 0.04; // 4.0% per 60fps tick normalized
+    // ---------------------------------------------------------
+    // 3. SOFT-BODY PHYSICS BALL & VERTEX RING
+    // ---------------------------------------------------------
+    const BASE_RADIUS = Math.min(W, H) < 600 ? 115 : 150;
+    const NUM_NODES = RING_TEXT.length;
 
-    // Entities
-    const puck = {
-      x: W * 0.5,
-      y: H * 0.32,
-      vx: 0,
-      vy: 0,
-      r: 13,
-      scaleX: 1,
-      scaleY: 1
+    const ball = {
+      x: W * 0.32,
+      y: H * 0.68,
+      vx: 6.5,
+      vy: -5.2,
+      radius: BASE_RADIUS,
+      angle: -0.6,
+      omega: 0.014, // Angular velocity
+      isDragging: false,
+      dragOffsetX: 0,
+      dragOffsetY: 0,
+      lastCooldown: 0,
+      nodes: []
     };
 
-    const cursor = {
+    // Initialize perimeter spring nodes (1 node per character)
+    for (let i = 0; i < NUM_NODES; i++) {
+      ball.nodes.push({
+        rOffset: 0,   // Radial indentation/bulge from BASE_RADIUS
+        rVel: 0,      // Radial velocity
+        char: RING_TEXT[i]
+      });
+    }
+
+    // ---------------------------------------------------------
+    // 4. VIEWPORT EDGE CRACKS & SHARDS SYSTEM
+    // ---------------------------------------------------------
+    const cracks = [];
+    const shards = [];
+    let screenShake = 0;
+
+    function spawnFrameCrack(x, y, normalX, normalY, impactForce) {
+      playCrackSound(impactForce);
+      screenShake = Math.min(12, impactForce * 0.45);
+
+      const branchCount = 3 + Math.floor(Math.random() * 4);
+      const baseAngle = Math.atan2(normalY, normalX);
+      const branches = [];
+
+      for (let b = 0; b < branchCount; b++) {
+        const spread = (Math.random() - 0.5) * 1.45;
+        let curAngle = baseAngle + spread;
+        let cx = x;
+        let cy = y;
+        const pts = [{ x: cx, y: cy }];
+        const segments = 4 + Math.floor(Math.random() * 6);
+        const segLen = (8 + Math.random() * 14) * Math.min(2.2, impactForce / 12);
+
+        for (let s = 0; s < segments; s++) {
+          curAngle += (Math.random() - 0.5) * 0.55;
+          cx += Math.cos(curAngle) * segLen;
+          cy += Math.sin(curAngle) * segLen;
+          pts.push({ x: cx, y: cy });
+
+          // Sub-fork
+          if (Math.random() < 0.35 && s > 1) {
+            const subPts = [{ x: cx, y: cy }];
+            let subAngle = curAngle + (Math.random() > 0.5 ? 0.5 : -0.5);
+            let sx = cx, sy = cy;
+            for (let k = 0; k < 3; k++) {
+              sx += Math.cos(subAngle) * (segLen * 0.65);
+              sy += Math.sin(subAngle) * (segLen * 0.65);
+              subPts.push({ x: sx, y: sy });
+            }
+            branches.push({ pts: subPts, width: 1 });
+          }
+        }
+        branches.push({ pts, width: 1.6 });
+      }
+
+      cracks.push({
+        x, y,
+        branches,
+        alpha: 0.95,
+        createdAt: performance.now()
+      });
+
+      // Cap total cracks so canvas stays crisp
+      if (cracks.length > 24) cracks.shift();
+
+      // Spawn flying glass/frame splinters
+      const shardCount = Math.min(14, Math.floor(impactForce * 0.7));
+      for (let i = 0; i < shardCount; i++) {
+        const a = baseAngle + (Math.random() - 0.5) * 1.6;
+        const spd = 2 + Math.random() * (impactForce * 0.45);
+        shards.push({
+          x, y,
+          vx: Math.cos(a) * spd,
+          vy: Math.sin(a) * spd,
+          rot: Math.random() * Math.PI * 2,
+          vRot: (Math.random() - 0.5) * 0.25,
+          size: 3 + Math.random() * 5,
+          life: 1.0
+        });
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 5. POINTER / DRAG / FLICK / HOLD-INDENT INTERACTION
+    // ---------------------------------------------------------
+    const pointer = {
       x: W * 0.5,
-      y: H * 0.7,
+      y: H * 0.5,
       px: W * 0.5,
-      py: H * 0.7,
+      py: H * 0.5,
       vx: 0,
       vy: 0,
-      r: 16
+      down: false
     };
 
-    const goalPosts = {
-      y: 28,
-      postRadius: 5,
-      netDepth: 18,
-      netBounce: 0
-    };
+    window.addEventListener('pointerdown', (e) => {
+      pointer.down = true;
+      pointer.x = pointer.px = e.clientX;
+      pointer.y = pointer.py = e.clientY;
 
-    // 15-Second Game Loop State
-    let sprintActive = false;
-    let timeLeft = 15.0;
-    let goals = 0;
-    let lastTime = performance.now();
+      const dist = Math.hypot(pointer.x - ball.x, pointer.y - ball.y);
+      if (dist <= ball.radius * 1.25) {
+        ball.isDragging = true;
+        ball.dragOffsetX = ball.x - pointer.x;
+        ball.dragOffsetY = ball.y - pointer.y;
+        document.body.classList.add('dragging');
+      }
+    });
 
-    let scores = JSON.parse(localStorage.getItem('vm_silber_lb') || JSON.stringify([
-      { name: 'VM', goals: 9 },
-      { name: 'IAN', goals: 7 },
-      { name: 'SAM', goals: 5 },
-      { name: 'LEO', goals: 3 }
-    ]));
-
-    // Pointer tracking
     window.addEventListener('pointermove', (e) => {
-      cursor.x = e.clientX;
-      cursor.y = e.clientY;
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
     });
 
-    // Settings Popover Controls
-    gameBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      gamePopover.classList.toggle('open');
+    window.addEventListener('pointerup', () => {
+      pointer.down = false;
+      if (ball.isDragging) {
+        ball.isDragging = false;
+        document.body.classList.remove('dragging');
+        // Transfer flick momentum
+        ball.vx = Math.max(-34, Math.min(34, pointer.vx * 0.85));
+        ball.vy = Math.max(-34, Math.min(34, pointer.vy * 0.85));
+      }
     });
 
-    goalSizeSlider.addEventListener('input', (e) => {
-      goalMultiplier = parseFloat(e.target.value);
-      goalSizeLabel.textContent = `${goalMultiplier}×`;
-    });
+    // ---------------------------------------------------------
+    // 6. SOFT-BODY INDENTATION & EDGE PHYSICS STEP
+    // ---------------------------------------------------------
+    function updatePhysics(now) {
+      // Track pointer velocity for flicking & cursor-brush indentation
+      pointer.vx = pointer.x - pointer.px;
+      pointer.vy = pointer.y - pointer.py;
+      pointer.px = pointer.x;
+      pointer.py = pointer.y;
 
-    frictionSlider.addEventListener('input', (e) => {
-      const pct = parseFloat(e.target.value);
-      frictionLabel.textContent = `${pct.toFixed(1)}%`;
-      puckFriction = pct / 100;
-    });
+      if (ball.isDragging) {
+        // Follow cursor smoothly; allow user to push ball into/past the viewport frame
+        const targetX = pointer.x + ball.dragOffsetX;
+        const targetY = pointer.y + ball.dragOffsetY;
+        ball.vx = (targetX - ball.x) * 0.35;
+        ball.vy = (targetY - ball.y) * 0.35;
+        ball.x += ball.vx;
+        ball.y += ball.vy;
 
-    resetSettingsBtn.addEventListener('click', () => {
-      goalMultiplier = 2.0;
-      puckFriction = 0.04;
-      goalSizeSlider.value = '2';
-      frictionSlider.value = '4.0';
-      goalSizeLabel.textContent = '2×';
-      frictionLabel.textContent = '4.0%';
-      resetPuck();
-    });
-
-    saveSettingsBtn.addEventListener('click', () => {
-      gamePopover.classList.remove('open');
-    });
-
-    function resetPuck() {
-      puck.x = W * 0.5;
-      puck.y = H * 0.32;
-      puck.vx = 0;
-      puck.vy = 0;
-    }
-
-    function spawnPlusOne(x, y) {
-      const el = document.createElement('div');
-      el.className = 'plus-one';
-      el.textContent = '+1';
-      el.style.left = `${x}px`;
-      el.style.top = `${y + 16}px`;
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 750);
-    }
-
-    function onGoalScored() {
-      playGoalChime();
-      goalPosts.netBounce = 1.0;
-      spawnPlusOne(puck.x, goalPosts.y);
-
-      if (!sprintActive) {
-        sprintActive = true;
-        goals = 1;
-        timeLeft = 15.0;
-        topHud.classList.add('visible');
+        // Slight rotational torque while dragging near walls
+        ball.omega *= 0.95;
       } else {
-        goals += 1;
+        // Free-flight edge-to-edge motion
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        // Keep a lively minimum cruise speed so it perpetually roams edge to edge
+        const speed = Math.hypot(ball.vx, ball.vy);
+        const minCruise = 4.2;
+        if (speed > 0.01 && speed < minCruise) {
+          ball.vx = (ball.vx / speed) * minCruise;
+          ball.vy = (ball.vy / speed) * minCruise;
+        } else if (speed > minCruise) {
+          ball.vx *= 0.9985;
+          ball.vy *= 0.9985;
+        }
+
+        // Wall Bounces + Rotational Spin Transfer + Frame Cracking
+        const hitCooldownPassed = (now - ball.lastCooldown) > 90;
+
+        // Left Frame
+        if (ball.x - ball.radius < 0) {
+          const pen = ball.radius - ball.x;
+          if (ball.vx < 0) {
+            const impact = Math.abs(ball.vx);
+            ball.vx = Math.abs(ball.vx) * 0.94;
+            ball.omega = (ball.vy * 0.0018);
+            if (hitCooldownPassed) {
+              playBounceSound(impact);
+              if (impact > 9.5 || pen > 18) spawnFrameCrack(0, Math.max(20, Math.min(H - 20, ball.y)), 1, 0, impact);
+              ball.lastCooldown = now;
+            }
+          }
+          ball.x = ball.radius - pen * 0.35;
+        }
+        // Right Frame
+        else if (ball.x + ball.radius > W) {
+          const pen = (ball.x + ball.radius) - W;
+          if (ball.vx > 0) {
+            const impact = Math.abs(ball.vx);
+            ball.vx = -Math.abs(ball.vx) * 0.94;
+            ball.omega = -(ball.vy * 0.0018);
+            if (hitCooldownPassed) {
+              playBounceSound(impact);
+              if (impact > 9.5 || pen > 18) spawnFrameCrack(W, Math.max(20, Math.min(H - 20, ball.y)), -1, 0, impact);
+              ball.lastCooldown = now;
+            }
+          }
+          ball.x = W - ball.radius + pen * 0.35;
+        }
+
+        // Top Frame
+        if (ball.y - ball.radius < 0) {
+          const pen = ball.radius - ball.y;
+          if (ball.vy < 0) {
+            const impact = Math.abs(ball.vy);
+            ball.vy = Math.abs(ball.vy) * 0.94;
+            ball.omega = -(ball.vx * 0.0018);
+            if (hitCooldownPassed) {
+              playBounceSound(impact);
+              if (impact > 9.5 || pen > 18) spawnFrameCrack(Math.max(20, Math.min(W - 20, ball.x)), 0, 0, 1, impact);
+              ball.lastCooldown = now;
+            }
+          }
+          ball.y = ball.radius - pen * 0.35;
+        }
+        // Bottom Frame
+        else if (ball.y + ball.radius > H) {
+          const pen = (ball.y + ball.radius) - H;
+          if (ball.vy > 0) {
+            const impact = Math.abs(ball.vy);
+            ball.vy = -Math.abs(ball.vy) * 0.94;
+            ball.omega = (ball.vx * 0.0018);
+            if (hitCooldownPassed) {
+              playBounceSound(impact);
+              if (impact > 9.5 || pen > 18) spawnFrameCrack(Math.max(20, Math.min(W - 20, ball.x)), H, 0, -1, impact);
+              ball.lastCooldown = now;
+            }
+          }
+          ball.y = H - ball.radius + pen * 0.35;
+        }
       }
 
-      scoreText.textContent = `${goals} ${goals === 1 ? 'goal' : 'goals'}`;
+      // Advance ring rotation
+      ball.angle += ball.omega;
 
-      // Serve puck back toward center
-      puck.x = W * 0.5;
-      puck.y = H * 0.35;
-      puck.vx = (Math.random() - 0.5) * 6;
-      puck.vy = 5;
-    }
+      // ---------------------------------------------------------
+      // PER-CHARACTER SOFT-BODY INDENTATION SOLVER
+      // ---------------------------------------------------------
+      let totalIndentation = 0;
 
-    function renderLeaderboard(highlightName = null) {
-      scores.sort((a, b) => b.goals - a.goals);
-      scores = scores.slice(0, 10);
-      localStorage.setItem('vm_silber_lb', JSON.stringify(scores));
+      for (let i = 0; i < NUM_NODES; i++) {
+        const node = ball.nodes[i];
+        const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
 
-      lbRows.innerHTML = scores.map((s) => `
-        <li class="lb-row ${s.name === highlightName ? 'me' : ''}">
-          <span>${s.name}</span>
-          <span>${s.goals}</span>
-        </li>
-      `).join('');
-    }
+        // Ideal un-deformed world position of this letter
+        const idealR = ball.radius;
+        const wx = ball.x + cosT * (idealR + node.rOffset);
+        const wy = ball.y + sinT * (idealR + node.rOffset);
 
-    function finishSprint() {
-      sprintActive = false;
-      finalGoalsText.textContent = `${goals} ${goals === 1 ? 'goal' : 'goals'}`;
-      signForm.style.display = 'flex';
-      renderLeaderboard();
-      lbModal.classList.add('open');
-    }
+        // 1. Check constraint against the 4 viewport walls (indents when held/pressed over frame)
+        const margin = 8;
+        let requiredR = idealR + node.rOffset;
 
-    signForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = (initialsInput.value || 'VM').toUpperCase();
-      scores.push({ name, goals });
-      signForm.style.display = 'none';
-      initialsInput.value = '';
-      renderLeaderboard(name);
-    });
+        if (wx < margin && cosT < -0.05) {
+          requiredR = Math.min(requiredR, (margin - ball.x) / cosT);
+        }
+        if (wx > W - margin && cosT > 0.05) {
+          requiredR = Math.min(requiredR, (W - margin - ball.x) / cosT);
+        }
+        if (wy < margin && sinT < -0.05) {
+          requiredR = Math.min(requiredR, (margin - ball.y) / sinT);
+        }
+        if (wy > H - margin && sinT > 0.05) {
+          requiredR = Math.min(requiredR, (H - margin - ball.y) / sinT);
+        }
 
-    playAgainBtn.addEventListener('click', () => {
-      lbModal.classList.remove('open');
-      goals = 0;
-      timeLeft = 15.0;
-      scoreText.textContent = '0 goals';
-      timerText.textContent = ':15';
-      topHud.classList.remove('visible');
-      resetPuck();
-    });
+        // Clamp maximum inward crush so ring stays legible
+        const minAllowedR = ball.radius * 0.38;
+        requiredR = Math.max(minAllowedR, requiredR);
 
-    doneBtn.addEventListener('click', () => {
-      lbModal.classList.remove('open');
-      topHud.classList.remove('visible');
-    });
+        if (requiredR < idealR + node.rOffset) {
+          const crush = (idealR + node.rOffset) - requiredR;
+          node.rOffset = requiredR - idealR;
+          node.rVel *= 0.4;
+          totalIndentation += crush;
 
-    openLbPill.addEventListener('click', () => {
-      finalGoalsText.textContent = `${goals} ${goals === 1 ? 'goal' : 'goals'}`;
-      signForm.style.display = 'none';
-      renderLeaderboard();
-      lbModal.classList.add('open');
-    });
+          // If user forcefully crushes the ball deep into the frame while dragging, fracture the edge
+          if (ball.isDragging && crush > 8 && Math.random() < 0.035 && (now - ball.lastCooldown > 180)) {
+            const cx = Math.max(0, Math.min(W, wx));
+            const cy = Math.max(0, Math.min(H, wy));
+            const nx = wx < margin ? 1 : (wx > W - margin ? -1 : 0);
+            const ny = wy < margin ? 1 : (wy > H - margin ? -1 : 0);
+            if (nx !== 0 || ny !== 0) {
+              spawnFrameCrack(cx, cy, nx, ny, 14);
+              ball.lastCooldown = now;
+            }
+          }
+        }
 
-    // Bounce off the centered "Vincent Meert" name pill
-    function collideWithNameBox() {
-      const rect = nameBox.getBoundingClientRect();
-      const closestX = Math.max(rect.left, Math.min(puck.x, rect.right));
-      const closestY = Math.max(rect.top, Math.min(puck.y, rect.bottom));
-      const dx = puck.x - closestX;
-      const dy = puck.y - closestY;
-      const distSq = dx * dx + dy * dy;
+        // 2. Cursor hover/poke indentation on individual letters when not dragging
+        if (!ball.isDragging) {
+          const dx = wx - pointer.x;
+          const dy = wy - pointer.y;
+          const distToCursor = Math.hypot(dx, dy);
+          const pokeRadius = 38;
+          if (distToCursor < pokeRadius) {
+            const push = (1 - distToCursor / pokeRadius) * -14;
+            node.rVel += push * 0.18;
+          }
+        }
 
-      if (distSq < puck.r * puck.r) {
-        const dist = Math.sqrt(distSq) || 0.001;
-        const nx = dx / dist;
-        const ny = dy / dist;
-        const overlap = puck.r - dist;
+        // 3. Hooke's Law radial spring restoration
+        const springK = 0.16;
+        const damping = 0.80;
+        node.rVel += (-node.rOffset * springK);
+        node.rVel *= damping;
+        node.rOffset += node.rVel;
+      }
 
-        puck.x += nx * overlap;
-        puck.y += ny * overlap;
+      // Volume conservation: when one side indents against the frame, adjacent sides bulge outward
+      const avgBulge = Math.min(28, (totalIndentation / NUM_NODES) * 0.65);
+      for (let i = 0; i < NUM_NODES; i++) {
+        const prev = ball.nodes[(i - 1 + NUM_NODES) % NUM_NODES];
+        const next = ball.nodes[(i + 1) % NUM_NODES];
+        const curr = ball.nodes[i];
 
-        const vn = puck.vx * nx + puck.vy * ny;
-        if (vn < 0) {
-          puck.vx -= 2.1 * vn * nx;
-          puck.vy -= 2.1 * vn * ny;
-
-          const spd = Math.hypot(puck.vx, puck.vy);
-          playTone(260 + spd * 8, 0.07, 'sine', Math.min(0.25, spd / 40));
-
-          // Subtle spring jolt on the name text
-          nameBox.style.transform = `translate(${-nx * 6}px, ${-ny * 6}px) scale(0.96)`;
-          setTimeout(() => {
-            nameBox.style.transform = 'translate(0, 0) scale(1)';
-          }, 140);
+        // Neighbor coupling smooths the curve of the text ring
+        const neighborAvg = (prev.rOffset + next.rOffset) * 0.5;
+        curr.rVel += (neighborAvg - curr.rOffset) * 0.28;
+        if (curr.rOffset >= -1) {
+          curr.rOffset += avgBulge * 0.08;
         }
       }
     }
 
-    // Collide with Goal Posts
-    function collideWithPost(px, py) {
-      const dx = puck.x - px;
-      const dy = puck.y - py;
-      const dist = Math.hypot(dx, dy);
-      const minDist = puck.r + goalPosts.postRadius;
+    // ---------------------------------------------------------
+    // 7. RENDER LOOP (CRACKS, SHARDS & DEFORMABLE TEXT RING)
+    // ---------------------------------------------------------
+    function render(now) {
+      updatePhysics(now);
 
-      if (dist < minDist) {
-        const nx = dx / (dist || 1);
-        const ny = dy / (dist || 1);
-        puck.x += nx * (minDist - dist);
-        puck.y += ny * (minDist - dist);
-
-        const vn = puck.vx * nx + puck.vy * ny;
-        if (vn < 0) {
-          puck.vx -= 1.9 * vn * nx;
-          puck.vy -= 1.9 * vn * ny;
-          playTone(420, 0.09, 'triangle', 0.25);
-        }
-      }
-    }
-
-    function tick(now) {
-      const dt = Math.min((now - lastTime) / 1000, 0.1);
-      lastTime = now;
-
-      // Update 15-second sprint clock
-      if (sprintActive) {
-        timeLeft -= dt;
-        if (timeLeft <= 0) {
-          timeLeft = 0;
-          timerText.textContent = ':00';
-          finishSprint();
-        } else {
-          const secs = Math.ceil(timeLeft);
-          timerText.textContent = `:${secs < 10 ? '0' + secs : secs}`;
-        }
-      }
-
-      // Compute cursor velocity
-      cursor.vx = cursor.x - cursor.px;
-      cursor.vy = cursor.y - cursor.py;
-      cursor.px = cursor.x;
-      cursor.py = cursor.y;
-
-      // Apply puck velocity & friction (scaled by user slider)
-      const damping = Math.pow(1 - puckFriction * 0.45, dt * 60);
-      puck.x += puck.vx;
-      puck.y += puck.vy;
-      puck.vx *= damping;
-      puck.vy *= damping;
-
-      // Cursor Mallet vs Puck Collision
-      const dx = puck.x - cursor.x;
-      const dy = puck.y - cursor.y;
-      const dist = Math.hypot(dx, dy);
-      const minDist = puck.r + cursor.r;
-
-      if (dist < minDist) {
-        const nx = dx / (dist || 1);
-        const ny = dy / (dist || 1);
-        const overlap = minDist - dist;
-
-        puck.x += nx * overlap;
-        puck.y += ny * overlap;
-
-        const relVx = puck.vx - cursor.vx;
-        const relVy = puck.vy - cursor.vy;
-        const vn = relVx * nx + relVy * ny;
-
-        if (vn < 0) {
-          puck.vx -= 1.85 * vn * nx;
-          puck.vy -= 1.85 * vn * ny;
-          puck.vx += cursor.vx * 0.42;
-          puck.vy += cursor.vy * 0.42;
-        }
-
-        const hitSpd = Math.hypot(puck.vx, puck.vy);
-        playTone(190 + hitSpd * 7, 0.07, 'sine', Math.min(0.3, hitSpd / 35));
-
-        // Squash & stretch bounce FX
-        puck.scaleX = 1.28;
-        puck.scaleY = 0.76;
-      }
-
-      // Cap max speed
-      const spd = Math.hypot(puck.vx, puck.vy);
-      if (spd > 36) {
-        puck.vx = (puck.vx / spd) * 36;
-        puck.vy = (puck.vy / spd) * 36;
-      }
-
-      // Goal Detection & Post Collisions
-      const halfGoal = (baseGoalWidth * goalMultiplier) / 2;
-      const leftPostX = W * 0.5 - halfGoal;
-      const rightPostX = W * 0.5 + halfGoal;
-
-      collideWithPost(leftPostX, goalPosts.y);
-      collideWithPost(rightPostX, goalPosts.y);
-
-      // Check if puck crosses the goal line between posts
-      if (
-        puck.y - puck.r <= goalPosts.y &&
-        puck.y + puck.r >= goalPosts.y - goalPosts.netDepth &&
-        puck.x > leftPostX + goalPosts.postRadius &&
-        puck.x < rightPostX - goalPosts.postRadius &&
-        puck.vy < 0
-      ) {
-        onGoalScored();
-      }
-
-      // Viewport Wall Bounces with Squash FX
-      if (puck.x - puck.r <= 0) {
-        puck.x = puck.r;
-        puck.vx = Math.abs(puck.vx) * 0.9;
-        puck.scaleX = 0.78;
-        puck.scaleY = 1.22;
-        playTone(150 + Math.abs(puck.vx) * 6, 0.06, 'sine', Math.min(0.22, Math.abs(puck.vx) / 35));
-      } else if (puck.x + puck.r >= W) {
-        puck.x = W - puck.r;
-        puck.vx = -Math.abs(puck.vx) * 0.9;
-        puck.scaleX = 0.78;
-        puck.scaleY = 1.22;
-        playTone(150 + Math.abs(puck.vx) * 6, 0.06, 'sine', Math.min(0.22, Math.abs(puck.vx) / 35));
-      }
-
-      if (puck.y - puck.r <= 0) {
-        puck.y = puck.r;
-        puck.vy = Math.abs(puck.vy) * 0.9;
-        puck.scaleX = 1.22;
-        puck.scaleY = 0.78;
-        playTone(150 + Math.abs(puck.vy) * 6, 0.06, 'sine', Math.min(0.22, Math.abs(puck.vy) / 35));
-      } else if (puck.y + puck.r >= H) {
-        puck.y = H - puck.r;
-        puck.vy = -Math.abs(puck.vy) * 0.9;
-        puck.scaleX = 1.22;
-        puck.scaleY = 0.78;
-        playTone(150 + Math.abs(puck.vy) * 6, 0.06, 'sine', Math.min(0.22, Math.abs(puck.vy) / 35));
-      }
-
-      // Collide with centered name
-      collideWithNameBox();
-
-      // Relax squash & stretch back to 1.0
-      puck.scaleX += (1 - puck.scaleX) * 0.22;
-      puck.scaleY += (1 - puck.scaleY) * 0.22;
-      goalPosts.netBounce *= 0.88;
-
-      // Render Canvas
-      ctx.clearRect(0, 0, W, H);
-
-      const fgColor = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
-      const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
-
-      // Draw Goal Net & Posts
       ctx.save();
-      ctx.strokeStyle = mutedColor;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      const netStretch = goalPosts.netBounce * 10;
-      ctx.moveTo(leftPostX, goalPosts.y);
-      ctx.lineTo(leftPostX + 6, goalPosts.y - goalPosts.netDepth - netStretch);
-      ctx.lineTo(rightPostX - 6, goalPosts.y - goalPosts.netDepth - netStretch);
-      ctx.lineTo(rightPostX, goalPosts.y);
-      ctx.stroke();
 
-      // Goal Posts
-      ctx.fillStyle = fgColor;
-      ctx.beginPath();
-      ctx.arc(leftPostX, goalPosts.y, goalPosts.postRadius, 0, Math.PI * 2);
-      ctx.arc(rightPostX, goalPosts.y, goalPosts.postRadius, 0, Math.PI * 2);
-      ctx.fill();
+      // Subtle camera shake on heavy wall impact
+      if (screenShake > 0.2) {
+        const sx = (Math.random() - 0.5) * screenShake;
+        const sy = (Math.random() - 0.5) * screenShake;
+        ctx.translate(sx, sy);
+        screenShake *= 0.82;
+      }
+
+      ctx.clearRect(-20, -20, W + 40, H + 40);
+
+      // 1. Render Viewport Frame Cracks
+      for (let i = cracks.length - 1; i >= 0; i--) {
+        const c = cracks[i];
+        const age = (now - c.createdAt) / 1000;
+        // Slowly heal cracks after 12 seconds
+        if (age > 12) {
+          c.alpha -= 0.008;
+          if (c.alpha <= 0) {
+            cracks.splice(i, 1);
+            continue;
+          }
+        }
+
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 255, 255, ${c.alpha * 0.85})`;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        for (const b of c.branches) {
+          ctx.lineWidth = b.width;
+          ctx.beginPath();
+          ctx.moveTo(b.pts[0].x, b.pts[0].y);
+          for (let p = 1; p < b.pts.length; p++) {
+            ctx.lineTo(b.pts[p].x, b.pts[p].y);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // 2. Render Flying Impact Shards
+      for (let i = shards.length - 1; i >= 0; i--) {
+        const s = shards[i];
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vy += 0.18; // Gravity
+        s.rot += s.vRot;
+        s.life -= 0.024;
+
+        if (s.life <= 0) {
+          shards.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.rotate(s.rot);
+        ctx.fillStyle = `rgba(255, 255, 255, ${s.life})`;
+        ctx.beginPath();
+        ctx.moveTo(-s.size, -s.size * 0.5);
+        ctx.lineTo(s.size, 0);
+        ctx.lineTo(-s.size * 0.4, s.size);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 3. Compute World Positions of Every Character on the Deformed Perimeter
+      const pts = [];
+      for (let i = 0; i < NUM_NODES; i++) {
+        const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
+        const r = ball.radius + ball.nodes[i].rOffset;
+        pts.push({
+          x: ball.x + Math.cos(theta) * r,
+          y: ball.y + Math.sin(theta) * r,
+          char: ball.nodes[i].char
+        });
+      }
+
+      // 4. Render Each Character Along the Local Tangent of the Deformed Curve
+      const fontSize = Math.min(W, H) < 600 ? 15 : 19;
+      ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", sans-serif`;
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      for (let i = 0; i < NUM_NODES; i++) {
+        const curr = pts[i];
+        const prev = pts[(i - 1 + NUM_NODES) % NUM_NODES];
+        const next = pts[(i + 1) % NUM_NODES];
+
+        // Tangent angle follows the actual squashed/indented contour
+        const tangentAngle = Math.atan2(next.y - prev.y, next.x - prev.x);
+
+        ctx.save();
+        ctx.translate(curr.x, curr.y);
+        ctx.rotate(tangentAngle);
+        ctx.fillText(curr.char, 0, 0);
+        ctx.restore();
+      }
+
       ctx.restore();
-
-      // Draw Puck with Squash & Stretch
-      ctx.save();
-      ctx.translate(puck.x, puck.y);
-      const angle = Math.atan2(puck.vy, puck.vx);
-      ctx.rotate(angle);
-      ctx.scale(puck.scaleX, puck.scaleY);
-      ctx.beginPath();
-      ctx.arc(0, 0, puck.r, 0, Math.PI * 2);
-      ctx.fillStyle = fgColor;
-      ctx.fill();
-      ctx.restore();
-
-      // Draw Mallet Cursor
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cursor.x, cursor.y, cursor.r, 0, Math.PI * 2);
-      ctx.strokeStyle = fgColor;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cursor.x, cursor.y, 3, 0, Math.PI * 2);
-      ctx.fillStyle = fgColor;
-      ctx.fill();
-      ctx.restore();
-
-      requestAnimationFrame(tick);
+      requestAnimationFrame(render);
     }
 
-    requestAnimationFrame(tick);
+    requestAnimationFrame(render);
   </script>
 </body>
 </html>
