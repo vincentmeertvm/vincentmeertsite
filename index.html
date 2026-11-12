@@ -57,7 +57,7 @@
     // ---------------------------------------------------------
     const BG_PALETTE = [
       '#7b3fe4', // Electric Violet
-      '#00d2ff', // Bright Cyan (Photo 1 style)
+      '#00d2ff', // Bright Cyan
       '#3b82f6', // Vibrant Cobalt
       '#ff4d2d', // International Orange
       '#10b981', // Bright Emerald
@@ -100,6 +100,8 @@
       lastWallHit: 0,
       wasTouchingEdge: false,
       strain: 0,
+      lastCrackCrush: 0,
+      lastCrackTime: 0,
       state: 'intact', // 'intact' | 'shattered' | 'reforming'
       reformStart: 0,
       nodes: []
@@ -120,7 +122,6 @@
       });
     }
 
-    // Measure true proportional character widths so kerning & circle size match Photo 1
     function computeTypographyMetrics() {
       FONT_SIZE = Math.min(W, H) < 600 ? 18 : 25;
       OUTER_PAD = Math.round(FONT_SIZE * 0.38);
@@ -158,7 +159,6 @@
     resize();
     window.addEventListener('resize', resize);
 
-    // Initialize starting node world positions
     for (let i = 0; i < NUM_NODES; i++) {
       const theta = ball.angle + ball.nodes[i].thetaOffset;
       ball.nodes[i].wx = ball.x + Math.cos(theta) * ball.radius;
@@ -167,7 +167,7 @@
     }
 
     // ---------------------------------------------------------
-    // 2. WEB AUDIO SYNTH (BOUNCE & SHATTER)
+    // 2. WEB AUDIO SYNTH (BOUNCE, COMPRESSION CRACKING & SHATTER)
     // ---------------------------------------------------------
     let audioCtx = null;
     function unlockAudio() {
@@ -199,11 +199,66 @@
       osc.stop(now + 0.15);
     }
 
+    // Synthesizes crisp structural micro-fractures as the ring is compressed
+    function playCrackSound(stressLevel) {
+      if (!audioCtx) return;
+      const clampedStress = Math.min(1, Math.max(0.05, stressLevel));
+      // Under heavier compression, fire a double micro-snap for a realistic splintering feel
+      const snapCount = clampedStress > 0.55 && Math.random() > 0.35 ? 2 : 1;
+
+      for (let s = 0; s < snapCount; s++) {
+        const delay = s * (0.014 + Math.random() * 0.018);
+        const start = audioCtx.currentTime + delay;
+
+        // 1. High-voltage brittle fracture noise burst
+        const dur = 0.024 + clampedStress * 0.016;
+        const bufferSize = Math.floor(audioCtx.sampleRate * dur);
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.18));
+        }
+
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(1350 + clampedStress * 1750 + (Math.random() - 0.5) * 450, start);
+        filter.Q.setValueAtTime(3.2 + clampedStress * 2.0, start);
+
+        const noiseGain = audioCtx.createGain();
+        const peakVol = Math.min(0.45, 0.09 + clampedStress * 0.32) * (s === 1 ? 0.72 : 1);
+        noiseGain.gain.setValueAtTime(peakVol, start);
+        noiseGain.gain.exponentialRampToValueAtTime(0.002, start + dur);
+
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        noise.start(start);
+
+        // 2. Taut shell tension impulse
+        const snapOsc = audioCtx.createOscillator();
+        const snapGain = audioCtx.createGain();
+        snapOsc.type = 'triangle';
+        snapOsc.frequency.setValueAtTime(420 + clampedStress * 680 + Math.random() * 180, start);
+        snapOsc.frequency.exponentialRampToValueAtTime(95, start + 0.022);
+
+        snapGain.gain.setValueAtTime(peakVol * 0.55, start);
+        snapGain.gain.exponentialRampToValueAtTime(0.001, start + 0.024);
+
+        snapOsc.connect(snapGain);
+        snapGain.connect(audioCtx.destination);
+        snapOsc.start(start);
+        snapOsc.stop(start + 0.025);
+      }
+    }
+
     function playShatterSound() {
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
 
-      const bufferSize = audioCtx.sampleRate * 0.16;
+      const bufferSize = audioCtx.sampleRate * 0.18;
       const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
@@ -215,19 +270,20 @@
 
       const filter = audioCtx.createBiquadFilter();
       filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(1850, now);
-      filter.Q.setValueAtTime(1.8, now);
+      filter.frequency.setValueAtTime(1950, now);
+      filter.Q.setValueAtTime(1.6, now);
 
       const gain = audioCtx.createGain();
-      gain.gain.setValueAtTime(0.45, now);
-      gain.gain.exponentialRampToValueAtTime(0.005, now + 0.16);
+      gain.gain.setValueAtTime(0.5, now);
+      gain.gain.exponentialRampToValueAtTime(0.005, now + 0.18);
 
       noise.connect(filter);
       filter.connect(gain);
       gain.connect(audioCtx.destination);
       noise.start(now);
 
-      playBounceSound(14);
+      playCrackSound(1.0);
+      playBounceSound(15);
     }
 
     // ---------------------------------------------------------
@@ -279,6 +335,7 @@
         ball.dragOffsetY = ball.y - pointer.y;
         ball.vx = 0;
         ball.vy = 0;
+        ball.lastCrackCrush = 0;
         document.body.classList.add('dragging');
       }
     });
@@ -292,6 +349,7 @@
       pointer.down = false;
       if (ball.isDragging) {
         ball.isDragging = false;
+        ball.lastCrackCrush = 0;
         document.body.classList.remove('dragging');
 
         ball.vx = Math.max(-22, Math.min(22, pointer.vx * 0.65));
@@ -313,6 +371,7 @@
       ball.state = 'shattered';
       ball.isDragging = false;
       ball.strain = 0;
+      ball.lastCrackCrush = 0;
       ball.vx = 0;
       ball.vy = 0;
       ball.omega = 0;
@@ -343,7 +402,7 @@
     }
 
     // ---------------------------------------------------------
-    // 5. PHYSICS STEP (FLUSH EDGE CONTACT & INDENT)
+    // 5. PHYSICS STEP (FLUSH EDGE CONTACT, CRACKING & INDENT)
     // ---------------------------------------------------------
     function updatePhysics(now) {
       pointer.vx = pointer.x - pointer.px;
@@ -609,14 +668,42 @@
         ball.nodes[i].wAngle = Math.atan2(next.wy - prev.wy, next.wx - prev.wx);
       }
 
+      // ---------------------------------------------------------
+      // PROGRESSIVE CRACKING AUDIO & SHATTER THRESHOLD
+      // ---------------------------------------------------------
       const crushRatio = maxNodeCrush / ball.radius;
-      if (ball.isDragging && crushRatio > 0.42) {
-        ball.strain += (crushRatio - 0.38) * 0.085;
-        if (crushRatio > 0.68 || ball.strain >= 1.0) {
-          triggerBallCrackOpen();
+
+      if (ball.isDragging && crushRatio > 0.08) {
+        // 1. Ratchet cracking as the user pushes deeper into the frame
+        const stepSize = Math.max(0.022, 0.055 - crushRatio * 0.05);
+        if (crushRatio >= ball.lastCrackCrush + stepSize && (now - ball.lastCrackTime) > 45) {
+          const stress = Math.min(1, (crushRatio - 0.08) / 0.55);
+          playCrackSound(stress);
+          ball.lastCrackCrush = crushRatio;
+          ball.lastCrackTime = now;
+        } else if (crushRatio < ball.lastCrackCrush - 0.03) {
+          // Reset ratchet down when user eases pressure so pushing back in cracks again
+          ball.lastCrackCrush = crushRatio;
+        }
+
+        // 2. High-compression structural strain & rapid pre-shatter cracking
+        if (crushRatio > 0.40) {
+          ball.strain += (crushRatio - 0.36) * 0.085;
+          const strainInterval = Math.max(48, 190 - ball.strain * 145);
+          if ((now - ball.lastCrackTime) > strainInterval) {
+            playCrackSound(Math.min(1, 0.55 + ball.strain * 0.45));
+            ball.lastCrackTime = now;
+          }
+
+          if (crushRatio > 0.68 || ball.strain >= 1.0) {
+            triggerBallCrackOpen();
+          }
+        } else {
+          ball.strain = Math.max(0, ball.strain - 0.05);
         }
       } else {
         ball.strain = Math.max(0, ball.strain - 0.05);
+        ball.lastCrackCrush = 0;
       }
     }
 
@@ -640,8 +727,8 @@
         let jitterX = 0;
         let jitterY = 0;
         let jitterRot = 0;
-        if (ball.state === 'intact' && ball.strain > 0.15) {
-          const mag = ball.strain * 3.5;
+        if (ball.state === 'intact' && ball.strain > 0.12) {
+          const mag = ball.strain * 3.8;
           jitterX = (Math.random() - 0.5) * mag;
           jitterY = (Math.random() - 0.5) * mag;
           jitterRot = (Math.random() - 0.5) * (ball.strain * 0.18);
