@@ -19,7 +19,7 @@
       overflow: hidden;
       background-color: #7b3fe4;
       transition: background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-      font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "Helvetica Neue", sans-serif;
+      font-family: "Helvetica Neue", Helvetica, "Inter", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
       touch-action: none;
       cursor: grab;
@@ -49,30 +49,15 @@
 
     let W = window.innerWidth;
     let H = window.innerHeight;
-    let FONT_SIZE = Math.min(W, H) < 600 ? 15 : 19;
-    // Exact half-glyph distance from middle baseline to outer letter edge (~7px on desktop)
-    let OUTER_PAD = Math.round(FONT_SIZE * 0.36);
-
-    function resize() {
-      const dpr = window.devicePixelRatio || 1;
-      W = window.innerWidth;
-      H = window.innerHeight;
-      FONT_SIZE = Math.min(W, H) < 600 ? 15 : 19;
-      OUTER_PAD = Math.round(FONT_SIZE * 0.36);
-      canvas.width = W * dpr;
-      canvas.height = H * dpr;
-      canvas.style.width = W + 'px';
-      canvas.style.height = H + 'px';
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    resize();
-    window.addEventListener('resize', resize);
+    let FONT_SIZE = Math.min(W, H) < 600 ? 18 : 25;
+    let OUTER_PAD = Math.round(FONT_SIZE * 0.38);
 
     // ---------------------------------------------------------
-    // 1. PALETTE, TEXT COLOR TOGGLE & RING TEXT
+    // 1. PALETTE, TEXT COLOR TOGGLE & PROPORTIONAL METRICS
     // ---------------------------------------------------------
     const BG_PALETTE = [
       '#7b3fe4', // Electric Violet
+      '#00d2ff', // Bright Cyan (Photo 1 style)
       '#3b82f6', // Vibrant Cobalt
       '#ff4d2d', // International Orange
       '#10b981', // Bright Emerald
@@ -80,8 +65,7 @@
       '#6366f1', // Indigo
       '#f59e0b', // Warm Amber
       '#14b8a6', // Teal
-      '#f43f5e', // Coral Rose
-      '#06b6d4'  // Electric Cyan
+      '#f43f5e'  // Coral Rose
     ];
     let currentColorIdx = 0;
     let isTextWhite = true;
@@ -96,12 +80,91 @@
       isTextWhite = !isTextWhite;
     }
 
-    const RING_TEXT = "vincent meert drives growth in tech & ai. previously across wpp, automotive, ict & banking.   ";
+    const RING_TEXT = "vincent meert drives growth in tech & ai. previously across wpp, automotive, ict & banking.    ";
     const NUM_NODES = RING_TEXT.length;
-    const BASE_RADIUS = Math.min(W, H) < 600 ? 115 : 150;
 
     const GRAVITY = 0.14;
     const MAX_OMEGA = 0.045;
+
+    const ball = {
+      x: W * 0.5,
+      y: H * 0.42,
+      vx: 0.45,
+      vy: 0,
+      radius: 178,
+      angle: -0.5,
+      omega: 0.006,
+      isDragging: false,
+      dragOffsetX: 0,
+      dragOffsetY: 0,
+      lastWallHit: 0,
+      wasTouchingEdge: false,
+      strain: 0,
+      state: 'intact', // 'intact' | 'shattered' | 'reforming'
+      reformStart: 0,
+      nodes: []
+    };
+
+    for (let i = 0; i < NUM_NODES; i++) {
+      ball.nodes.push({
+        char: RING_TEXT[i],
+        thetaOffset: 0,
+        rOffset: 0,
+        rVel: 0,
+        wx: W * 0.5,
+        wy: H * 0.42,
+        wAngle: 0,
+        vx: 0,
+        vy: 0,
+        vRot: 0
+      });
+    }
+
+    // Measure true proportional character widths so kerning & circle size match Photo 1
+    function computeTypographyMetrics() {
+      FONT_SIZE = Math.min(W, H) < 600 ? 18 : 25;
+      OUTER_PAD = Math.round(FONT_SIZE * 0.38);
+      ctx.font = `400 ${FONT_SIZE}px "Helvetica Neue", Helvetica, "Inter", -apple-system, Arial, sans-serif`;
+
+      const tracking = FONT_SIZE * 0.012;
+      const charCenters = [];
+      let cursor = 0;
+
+      for (let i = 0; i < NUM_NODES; i++) {
+        const w = ctx.measureText(RING_TEXT[i]).width + tracking;
+        charCenters.push(cursor + w * 0.5);
+        cursor += w;
+      }
+
+      const totalCircumference = cursor;
+      ball.radius = totalCircumference / (Math.PI * 2);
+
+      for (let i = 0; i < NUM_NODES; i++) {
+        ball.nodes[i].thetaOffset = (charCenters[i] / totalCircumference) * Math.PI * 2;
+      }
+    }
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      computeTypographyMetrics();
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Initialize starting node world positions
+    for (let i = 0; i < NUM_NODES; i++) {
+      const theta = ball.angle + ball.nodes[i].thetaOffset;
+      ball.nodes[i].wx = ball.x + Math.cos(theta) * ball.radius;
+      ball.nodes[i].wy = ball.y + Math.sin(theta) * ball.radius;
+      ball.nodes[i].wAngle = theta + Math.PI * 0.5;
+    }
 
     // ---------------------------------------------------------
     // 2. WEB AUDIO SYNTH (BOUNCE & SHATTER)
@@ -168,44 +231,7 @@
     }
 
     // ---------------------------------------------------------
-    // 3. BALL STATE & PRE-INITIALIZED PERIMETER NODES
-    // ---------------------------------------------------------
-    const ball = {
-      x: W * 0.5,
-      y: H * 0.42,
-      vx: 0.45,
-      vy: 0,
-      radius: BASE_RADIUS,
-      angle: -0.5,
-      omega: 0.006,
-      isDragging: false,
-      dragOffsetX: 0,
-      dragOffsetY: 0,
-      lastWallHit: 0,
-      wasTouchingEdge: false,
-      strain: 0,
-      state: 'intact', // 'intact' | 'shattered' | 'reforming'
-      reformStart: 0,
-      nodes: []
-    };
-
-    for (let i = 0; i < NUM_NODES; i++) {
-      const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
-      ball.nodes.push({
-        char: RING_TEXT[i],
-        rOffset: 0,
-        rVel: 0,
-        wx: ball.x + Math.cos(theta) * BASE_RADIUS,
-        wy: ball.y + Math.sin(theta) * BASE_RADIUS,
-        wAngle: theta + Math.PI * 0.5,
-        vx: 0,
-        vy: 0,
-        vRot: 0
-      });
-    }
-
-    // ---------------------------------------------------------
-    // 4. POINTER INTERACTION, GENTLE SPIN & CLICK-TO-RESPAWN
+    // 3. POINTER INTERACTION, GENTLE SPIN & CLICK-TO-RESPAWN
     // ---------------------------------------------------------
     const pointer = {
       x: W * 0.5,
@@ -281,7 +307,7 @@
     });
 
     // ---------------------------------------------------------
-    // 5. POP / SHATTER THE BALL OF TEXT
+    // 4. POP / SHATTER THE BALL OF TEXT
     // ---------------------------------------------------------
     function triggerBallCrackOpen() {
       ball.state = 'shattered';
@@ -317,7 +343,7 @@
     }
 
     // ---------------------------------------------------------
-    // 6. PHYSICS STEP (FLUSH EDGE CONTACT & INDENT)
+    // 5. PHYSICS STEP (FLUSH EDGE CONTACT & INDENT)
     // ---------------------------------------------------------
     function updatePhysics(now) {
       pointer.vx = pointer.x - pointer.px;
@@ -325,7 +351,6 @@
       pointer.px = pointer.x;
       pointer.py = pointer.y;
 
-      // Exact outer radius where the top of the letter glyphs touch the screen edge
       const outerRadius = ball.radius + OUTER_PAD;
 
       // STATE 1: SHATTERED (FLOATS DOWN IN LOW GRAVITY, WAITS FOR CLICK)
@@ -363,7 +388,7 @@
 
         for (let i = 0; i < NUM_NODES; i++) {
           const n = ball.nodes[i];
-          const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
+          const theta = ball.angle + n.thetaOffset;
           const targetX = ball.x + Math.cos(theta) * ball.radius;
           const targetY = ball.y + Math.sin(theta) * ball.radius;
           const targetAngle = theta + Math.PI * 0.5;
@@ -518,7 +543,7 @@
 
       for (let i = 0; i < NUM_NODES; i++) {
         const node = ball.nodes[i];
-        const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
+        const theta = ball.angle + node.thetaOffset;
         const cosT = Math.cos(theta);
         const sinT = Math.sin(theta);
 
@@ -569,7 +594,7 @@
       }
 
       for (let i = 0; i < NUM_NODES; i++) {
-        const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
+        const theta = ball.angle + ball.nodes[i].thetaOffset;
         const r = ball.radius + (ball.nodes[i].rOffset || 0);
         const rawWx = ball.x + Math.cos(theta) * r;
         const rawWy = ball.y + Math.sin(theta) * r;
@@ -596,14 +621,14 @@
     }
 
     // ---------------------------------------------------------
-    // 7. RENDER LOOP
+    // 6. RENDER LOOP
     // ---------------------------------------------------------
     function render(now) {
       updatePhysics(now || performance.now());
 
       ctx.clearRect(0, 0, W, H);
 
-      ctx.font = `500 ${FONT_SIZE}px -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", sans-serif`;
+      ctx.font = `400 ${FONT_SIZE}px "Helvetica Neue", Helvetica, "Inter", -apple-system, Arial, sans-serif`;
       ctx.fillStyle = isTextWhite ? '#ffffff' : '#000000';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
