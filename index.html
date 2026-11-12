@@ -50,15 +50,15 @@
     let W = window.innerWidth;
     let H = window.innerHeight;
     let FONT_SIZE = Math.min(W, H) < 600 ? 15 : 19;
-    // Exact clearance from character centerline to outer glyph edge + descenders
-    let OUTER_PAD = Math.ceil(FONT_SIZE * 0.85);
+    // Exact half-glyph distance from middle baseline to outer letter edge (~7px on desktop)
+    let OUTER_PAD = Math.round(FONT_SIZE * 0.36);
 
     function resize() {
       const dpr = window.devicePixelRatio || 1;
       W = window.innerWidth;
       H = window.innerHeight;
       FONT_SIZE = Math.min(W, H) < 600 ? 15 : 19;
-      OUTER_PAD = Math.ceil(FONT_SIZE * 0.85);
+      OUTER_PAD = Math.round(FONT_SIZE * 0.36);
       canvas.width = W * dpr;
       canvas.height = H * dpr;
       canvas.style.width = W + 'px';
@@ -247,7 +247,7 @@
       if (ball.state !== 'intact') return;
 
       const dist = Math.hypot(pointer.x - ball.x, pointer.y - ball.y);
-      if (dist <= ball.radius + OUTER_PAD * 1.5) {
+      if (dist <= ball.radius + OUTER_PAD * 2) {
         ball.isDragging = true;
         ball.dragOffsetX = ball.x - pointer.x;
         ball.dragOffsetY = ball.y - pointer.y;
@@ -317,7 +317,7 @@
     }
 
     // ---------------------------------------------------------
-    // 6. PHYSICS STEP (EXACT OUTER-BOUNDARY COLLISION & INDENT)
+    // 6. PHYSICS STEP (FLUSH EDGE CONTACT & INDENT)
     // ---------------------------------------------------------
     function updatePhysics(now) {
       pointer.vx = pointer.x - pointer.px;
@@ -325,7 +325,7 @@
       pointer.px = pointer.x;
       pointer.py = pointer.y;
 
-      // Effective outer radius of the ring including full character height
+      // Exact outer radius where the top of the letter glyphs touch the screen edge
       const outerRadius = ball.radius + OUTER_PAD;
 
       // STATE 1: SHATTERED (FLOATS DOWN IN LOW GRAVITY, WAITS FOR CLICK)
@@ -386,7 +386,7 @@
         return;
       }
 
-      // STATE 3: INTACT BALL WITH EXACT OUTER-EDGE STOPPING
+      // STATE 3: INTACT BALL WITH FLUSH EDGE STOPPING
       const canTriggerWallColor = (now - ball.lastWallHit) > 130;
 
       if (ball.isDragging) {
@@ -425,7 +425,7 @@
         ball.vx *= 0.996;
         ball.omega *= 0.997;
 
-        // Left Wall Exact Outer Stop & Bounce
+        // Left Wall Flush Stop & Bounce
         if (ball.x - outerRadius <= 0) {
           ball.x = outerRadius;
           if (ball.vx < 0) {
@@ -439,7 +439,7 @@
             }
           }
         }
-        // Right Wall Exact Outer Stop & Bounce
+        // Right Wall Flush Stop & Bounce
         else if (ball.x + outerRadius >= W) {
           ball.x = W - outerRadius;
           if (ball.vx > 0) {
@@ -454,7 +454,7 @@
           }
         }
 
-        // Top Ceiling Exact Outer Stop & Bounce
+        // Top Ceiling Flush Stop & Bounce
         if (ball.y - outerRadius <= 0) {
           ball.y = outerRadius;
           if (ball.vy < 0) {
@@ -468,7 +468,7 @@
             }
           }
         }
-        // Bottom Floor Exact Outer Stop, Soft Moon Bounce & Gentle Roll
+        // Bottom Floor Flush Stop, Soft Moon Bounce & Gentle Roll
         else if (ball.y + outerRadius >= H) {
           ball.y = H - outerRadius;
 
@@ -510,11 +510,11 @@
       ball.angle += ball.omega;
 
       // ---------------------------------------------------------
-      // PRECISION INDENTATION SOLVER AT THE EXACT SCREEN EDGE
+      // PRECISION INDENTATION SOLVER FLUSH WITH SCREEN BORDER
       // ---------------------------------------------------------
       let totalCrush = 0;
       let maxNodeCrush = 0;
-      const wallPad = OUTER_PAD; // Ensures letters never clip past the screen edge
+      const wallPad = OUTER_PAD;
 
       for (let i = 0; i < NUM_NODES; i++) {
         const node = ball.nodes[i];
@@ -525,7 +525,6 @@
         const idealR = ball.radius;
 
         if (ball.isDragging) {
-          // Calculate exact radial distance to the 4 screen walls along this node's angle
           let maxAllowedR = idealR;
 
           if (cosT < -0.001) {
@@ -545,24 +544,20 @@
             totalCrush += rawCrush;
             if (rawCrush > maxNodeCrush) maxNodeCrush = rawCrush;
 
-            // Directly indent node to the exact wall line
             node.rOffset = Math.max(-idealR * 0.78, maxAllowedR - idealR);
             node.rVel = 0;
           } else {
-            // Spring restoration for non-contacting nodes
             node.rVel += -node.rOffset * 0.22;
             node.rVel *= 0.76;
             node.rOffset += node.rVel;
           }
         } else {
-          // When not dragging, smoothly spring back to a pure circle
           node.rVel += -node.rOffset * 0.24;
           node.rVel *= 0.74;
           node.rOffset += node.rVel;
         }
       }
 
-      // Smooth neighbor coupling & subtle side bulge while held against the frame
       if (ball.isDragging && totalCrush > 0) {
         const bulge = Math.min(30, (totalCrush / NUM_NODES) * 0.75);
         for (let i = 0; i < NUM_NODES; i++) {
@@ -573,7 +568,6 @@
         }
       }
 
-      // Compute final world coordinates & hard-clamp strictly inside the viewport
       for (let i = 0; i < NUM_NODES; i++) {
         const theta = ball.angle + (i / NUM_NODES) * Math.PI * 2;
         const r = ball.radius + (ball.nodes[i].rOffset || 0);
@@ -590,7 +584,6 @@
         ball.nodes[i].wAngle = Math.atan2(next.wy - prev.wy, next.wx - prev.wx);
       }
 
-      // Check if user pushed hard enough into the frame to pop the ball open
       const crushRatio = maxNodeCrush / ball.radius;
       if (ball.isDragging && crushRatio > 0.42) {
         ball.strain += (crushRatio - 0.38) * 0.085;
